@@ -1,63 +1,25 @@
-# Decentralized Crowd Funding Marketplace DApp
+# Decentralized Crowd Funding DApp
 
-Build & Deploy a Decentralized Crowd Funding Marketplace DApp | Next.js + Solidity + Wagmi | Web3 Project for Beginners
-
-![alt text](https://www.daulathussain.com/wp-content/uploads/2025/06/Build-Deploy-a-Decentralized-Crowd-Funding-Marketplace-DApp-Next.js-Solidity-Wagmi-Web3-Project-for-Beginners.jpg)
+Built a Decentralized Crowd Funding DApp | Next.js + Solidity + Wagmi | Web3 Project 
 
 ## Instruction
+- ✅ Write and deploy a smart contract for managing crowdfunding campaigns
+- ✅ Connect your frontend to the Ethereum blockchain using Wagmi hooks
+- ✅ Allow users to create, contribute to, and track fundraising campaigns
+- ✅ Store campaign data securely on-chain
+- ✅ Deploy your DApp to a live blockchain network
 
-Kindly follow the following Instructions to run the project in your system and install the necessary requirements
-
-- [Final Source Code](https://www.theblockchaincoders.com/sourceCode/build-and-deploy-a-decentralized-crowd-funding-marketplace-dapp-or-next.js-+-solidity-+-wagmi-or-web3-project-for-beginners)
-
-#### Setup Video
-
-- [Final Code Setup video](https://youtu.be/ds_LyZDChqg?si=4_ZFPxaR93aroeYo)
-
-In this step-by-step tutorial, you’ll learn how to build and deploy a fully functional Blockchain Crowd Funding Marketplace DApp using Next.js, Solidity, and Wagmi Provider. This beginner-friendly Web3 project will teach you how to:
-
-✅ Write and deploy a smart contract for managing crowdfunding campaigns
-✅ Connect your frontend to the Ethereum blockchain using Wagmi hooks
-✅ Allow users to create, contribute to, and track fundraising campaigns
-✅ Store campaign data securely on-chain
-✅ Deploy your DApp to a live blockchain network
-
-Whether you're new to Web3 development or looking to strengthen your skills, this tutorial is perfect for developers ready to build real-world decentralized applications.
 
 🔗 Tech Stack:
 Next.js • Solidity • Hardhat • Ethers.js • Wagmi • RainbowKit • MetaMask
 
-#### Crowd Funding Marketplace DApp
 
-```
-  WATCH: Crowd Funding Marketplace DApp
-  Get : https://www.theblockchaincoders.com/sourceCode/crowd-funding-marketplace-project-source-code
-  SETUP: https://youtu.be/muskTp3wf2k?si=wA9Lo0999hGCV23j
-  VIDEO: https://youtu.be/9iSsnQJyUDM?si=pj2BGj4S-3Avt1Dj
-```
 
-#### Deploying Dapp
 
-```
-  WATCH: Hostinger
-  Get : Discount 75%
-  URL: https://www.hostg.xyz/aff_c?offer_id=6&aff_id=139422
-```
 
-### MULTI-CURRENCY ICO DAPP
 
-```
-  PROJECT: MULTI-CURRENCY ICO DAPP
-  Code: https://www.theblockchaincoders.com/sourceCode/multi-currency-ico-dapp-using-next.js-solidity-and-wagmi
-  VIDEO: https://youtu.be/j8NO8ea5zVo?si=jCmvfXmpmefwjhO5
-```
 
-#### Install Vs Code Editor
 
-```
-  GET: VsCode Editor
-  URL: https://code.visualstudio.com/download
-```
 
 #### NodeJs & NPM Version
 
@@ -65,21 +27,11 @@ Next.js • Solidity • Hardhat • Ethers.js • Wagmi • RainbowKit • Meta
   NodeJs: v18.17.1 / LATEST
   NPM: 8.19.2
   URL: https://nodejs.org/en/download
-  Video: https://youtu.be/PIR0oBVowXU?si=9eNdR29u37F2ujJJ
-```
-
-#### FINAL SOURCE CODE
 
 ```
-  SETUP VIDEO:
-  URL: https://www.theblockchaincoders.com/sourceCode/build-and-deploy-blockchain-supply-chain-dapp-or-next.js-solidity-wagmi-(web3-project)
-```
 
-All you need to follow the complete project and follow the instructions which are explained in the tutorial by Daulat
 
-## Final Code Instruction
 
-If you download the final source code then you can follow the following instructions to run the Dapp successfully
 
 #### PINATA IPFS
 
@@ -109,17 +61,9 @@ If you download the final source code then you can follow the following instruct
   URL: https://www.alchemy.com/
 ```
 
-## Important Links
 
-- [Get Pro Blockchain Developer Course](https://www.theblockchaincoders.com/pro-nft-marketplace)
-- [Support Creator](https://bit.ly/Support-Creator)
-- [All Projects Source Code](https://www.theblockchaincoders.com/SourceCode)
 
-## Authors
 
-- [@theblockchaincoders.com](https://www.theblockchaincoders.com/)
-- [@consultancy](https://www.theblockchaincoders.com/consultancy)
-- [@youtube](https://www.youtube.com/@daulathussain)
 
 # CrowdFund Pro - Complete Frontend Structure
 
