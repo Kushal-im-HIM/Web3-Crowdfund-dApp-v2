@@ -1,0 +1,55 @@
+## FINAL SOURCE CODE SETUP
+
+- Kindly follow the following instruction to setup the final source code, down below, there is Setup video you must watch till the end to understand what you have got and how to run the project
+
+# Setup Vudeo Link
+
+- URL: https://youtu.be/ds_LyZDChqg?si=4_ZFPxaR93aroeYo
+
+📌 Timestamps
+00:00:00 ➤ Introduction
+00:00:23 ➤ Overview
+00:05:37 ➤ Features Demo
+00:14:34 ➤ Mobile Support
+00:16:28 ➤ Starter File
+00:17:30 ➤ Final Source Code
+00:28:44 ➤ Environment Variables
+00:31:25 ➤ Installation
+00:36:21 ➤ Testing Live
+
+
+####  CROWD FUNDING MARKETPLACE DAPP COMPLET PROJECT
+
+```
+  WATCH: CHAT DAPP
+  Get : https://www.theblockchaincoders.com/sourceCode/crowd-funding-marketplace-project-source-code
+  SETUP: https://youtu.be/muskTp3wf2k?si=yHlh4Y3fckj2rzej
+  VIDEO: https://youtu.be/9iSsnQJyUDM?si=Q8QzXFDwqPLKk78s
+```
+
+####  PRO BLOCKCHAIN COURSE 80+ 
+
+```
+  WATCH: PRO BLOCKCHAIN COURSE 80+ 
+  Get : https://www.theblockchaincoders.com/pro-nft-marketplace
+```
+
+
+####  Hostinger Deployment Online
+
+```
+  WATCH: Hostinger
+  Get : Discount 75%
+  URL: https://www.hostg.xyz/aff_c?offer_id=6&aff_id=139422
+```
+
+
+## Support EmailID
+
+- EmailID: theblockchaincoders@gmail.com
+
+- If you have any question related to the project, kindly connect to this emailID: (theblockchaincoders@gmail.com) for any help, In the email kindly provide the follow details about the project and your purchased emailID Likes
+
+1. EmailID: Which you have used when you bought the code
+2. Share Project URL: 
+3. Screenshot / Screen recording of error : Error which you are facing
