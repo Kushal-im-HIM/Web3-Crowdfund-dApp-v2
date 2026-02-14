@@ -32,13 +32,22 @@ export const NETWORK_CONFIGS = {
     rpcUrl: "http://localhost:8545",
     blockExplorer: "http://localhost:8545",
   },
+
   holesky: {
     name: "Holesky Testnet",
     chainId: 17000,
     rpcUrl: "https://ethereum-holesky.publicnode.com",
     blockExplorer: "https://holesky.etherscan.io",
   },
+
+  sepolia: {
+    name: "Sepolia Testnet",
+    chainId: 11155111,
+    rpcUrl: "https://eth-sepolia.g.alchemy.com/v2/YJGj5hyqrUOA3m8a8qmge",
+    blockExplorer: "https://sepolia.etherscan.io",
+  },
 };
+
 
 export const SIDEBAR_ITEMS = [
   {
