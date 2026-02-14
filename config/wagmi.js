@@ -5,22 +5,32 @@ import {
 
 import { configureChains, createConfig } from "wagmi";
 import { sepolia } from "wagmi/chains"; // ✅ Built-in Sepolia chain
-import { publicProvider } from "wagmi/providers/public";
 
-// -------- Optional providers (kept but unused) --------
-// import { jsonRpcProvider } from "wagmi/providers/jsonRpc";
+// ❌ Public provider causes rpc.sepolia.org timeouts
+// import { publicProvider } from "wagmi/providers/public";
+
+// ✅ Use custom RPC provider instead
+import { jsonRpcProvider } from "wagmi/providers/jsonRpc";
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL;
 
 
 // ======================================================
-// ✅ USE BUILT-IN SEPOLIA CHAIN (RECOMMENDED)
+// ✅ USE BUILT-IN SEPOLIA CHAIN + ALCHEMY RPC
 // ======================================================
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   [sepolia], // 🚀 Sepolia only
   [
-    publicProvider(), // Uses reliable public RPCs
+    jsonRpcProvider({
+      rpc: () => ({
+        http: RPC_URL, // 🔥 Forces Alchemy RPC usage
+      }),
+    }),
+
+    // ❌ DO NOT ENABLE — causes fallback to slow public nodes
+    // publicProvider(),
   ]
 );
 

@@ -76,7 +76,7 @@ contract CrowdfundingMarketplace is ReentrancyGuard, Ownable, Pausable {
     }
     
     // State variables
-    uint256 public constant CAMPAIGN_CREATION_FEE = 1 ether;
+    uint256 public constant CAMPAIGN_CREATION_FEE = 0.0001 ether;
     uint256 public totalFeesCollected;
     uint256 public campaignCounter;
     
