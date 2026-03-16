@@ -137,3 +137,36 @@ export const uploadCampaignMetadata = async (campaignData, imageFile) => {
     };
   }
 };
+
+/**
+ * Specifically for Milestone Evidence: 
+ * Takes a file (image/pdf) and extra details, uploads the file first, 
+ * then wraps it in a metadata JSON.
+ */
+export const uploadMilestoneEvidence = async (file, description) => {
+  try {
+    let fileHash = null;
+
+    // 1. Upload the actual evidence file (document/image)
+    if (file) {
+      const fileUpload = await uploadToIPFS(file);
+      if (!fileUpload.success) throw new Error(fileUpload.error);
+      fileHash = fileUpload.hash;
+    }
+
+    // 2. Wrap it in a JSON object for the Oracle to read
+    const evidenceMetadata = {
+      type: "milestone_evidence",
+      description: description || "No description provided",
+      fileUrl: fileHash ? `https://gateway.pinata.cloud/ipfs/${fileHash}` : null,
+      fileName: file?.name || "unnamed_file",
+      submittedAt: new Date().toISOString(),
+    };
+
+    // 3. Pin the JSON metadata
+    return await uploadJSONToIPFS(evidenceMetadata);
+  } catch (error) {
+    console.error("Milestone Evidence Upload Error:", error);
+    return { success: false, error: error.message };
+  }
+};
