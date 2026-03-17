@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ethers } from "ethers";
+import { toast } from "react-hot-toast";
+import { FiPlus, FiTrash2, FiCheck } from "react-icons/fi";
 import { useContract } from "../../hooks/useContract";
 
 const EMPTY_MS = { title: "", description: "", targetEth: "", durationDays: "" };
@@ -7,80 +9,188 @@ const EMPTY_MS = { title: "", description: "", targetEth: "", durationDays: "" }
 export default function MilestoneCreationForm({ campaignId, onDone }) {
   const { useRegisterCampaignForMilestones, useCreateMilestone } = useContract();
   const { write: register, isLoading: registering } = useRegisterCampaignForMilestones();
-  const { write: createMs } = useCreateMilestone();
+  const { write: createMs, isLoading: creatingMs } = useCreateMilestone();
 
   const [milestones, setMilestones] = useState([{ ...EMPTY_MS }]);
-  const [isRegistered, setIsRegistered] = useState(false);
+  const [step, setStep] = useState("register"); // "register" | "add" | "done"
 
   const handleAddMs = () => setMilestones([...milestones, { ...EMPTY_MS }]);
-  const handleUpdate = (i, f, v) => {
-    const newMs = [...milestones];
-    newMs[i][f] = v;
-    setMilestones(newMs);
+  const handleRemoveMs = (i) => setMilestones(milestones.filter((_, idx) => idx !== i));
+  const handleUpdate = (i, field, value) => {
+    const updated = [...milestones];
+    updated[i][field] = value;
+    setMilestones(updated);
   };
 
-  const handleSaveAll = async () => {
-    for (const m of milestones) {
-      if (!m.title || !m.targetEth) continue;
+  const handleRegister = () => {
+    if (!campaignId && campaignId !== 0) {
+      return toast.error("No campaign ID — please try again");
+    }
+    register({
+      args: [campaignId],
+    });
+    // Optimistically move to add step — tx is async, contract will revert if it fails
+    setTimeout(() => setStep("add"), 1000);
+  };
+
+  const handleSaveAll = () => {
+    const valid = milestones.filter((m) => m.title.trim() && m.targetEth);
+    if (valid.length === 0) {
+      return toast.error("Add at least one milestone with a title and target amount");
+    }
+
+    valid.forEach((m) => {
       createMs({
         args: [
           campaignId,
-          m.title,
-          m.description,
+          m.title.trim(),
+          m.description.trim(),
           ethers.utils.parseEther(m.targetEth),
-          BigInt(m.durationDays) * 86400n
-        ]
+          BigInt(parseInt(m.durationDays || "30")) * 86400n,
+        ],
       });
-    }
-    if (onDone) onDone();
+    });
+
+    toast.success(`${valid.length} milestone${valid.length > 1 ? "s" : ""} submitted!`);
+    setStep("done");
+    if (onDone) setTimeout(onDone, 1500);
   };
 
-  return (
-    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 mt-8">
-      <h3 className="text-lg font-bold text-indigo-900 mb-2">Milestone Configuration</h3>
-      <p className="text-sm text-indigo-700 mb-6">Define clear goals for your project to build trust with your backers.</p>
+  // ── Step 1: Register ───────────────────────────────────────────────────
+  if (step === "register") {
+    return (
+      <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-6">
+        <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-300 mb-1">
+          Enable Milestone System
+        </h3>
+        <p className="text-sm text-indigo-700 dark:text-indigo-400 mb-6">
+          Milestones let you break your project into funded stages. Backers can contribute to individual milestones, vote on completion, and get refunds if a milestone is rejected.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={handleRegister}
+            disabled={registering}
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition-colors disabled:cursor-not-allowed"
+          >
+            {registering ? "Registering..." : "Enable Milestones for this Campaign"}
+          </button>
+          {onDone && (
+            <button
+              onClick={onDone}
+              className="px-5 py-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
+            >
+              Skip
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
-      {!isRegistered ? (
+  // ── Step 3: Done ───────────────────────────────────────────────────────
+  if (step === "done") {
+    return (
+      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6 text-center">
+        <FiCheck className="w-10 h-10 text-green-500 mx-auto mb-3" />
+        <h3 className="text-lg font-bold text-green-800 dark:text-green-300 mb-1">Milestones Submitted!</h3>
+        <p className="text-sm text-green-700 dark:text-green-400">Your milestones are being recorded on-chain. They'll appear on the campaign page once confirmed.</p>
+      </div>
+    );
+  }
+
+  // ── Step 2: Add milestones ─────────────────────────────────────────────
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">Add Project Milestones</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Each milestone gets its own funding pool and approval vote.</p>
+        </div>
         <button
-          onClick={() => { register({ args: [campaignId] }); setIsRegistered(true); }}
-          className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition"
+          onClick={handleAddMs}
+          className="flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 font-semibold hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
         >
-          Enable Milestones for this Project
+          <FiPlus className="w-4 h-4" /> Add Milestone
         </button>
-      ) : (
-        <div className="space-y-4">
-          {milestones.map((m, i) => (
-            <div key={i} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      </div>
+
+      {milestones.map((m, i) => (
+        <div key={i} className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Milestone {i + 1}
+            </span>
+            {milestones.length > 1 && (
+              <button onClick={() => handleRemoveMs(i)} className="text-red-400 hover:text-red-600 transition-colors">
+                <FiTrash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <input
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+            placeholder="Milestone title (e.g. 'Prototype Complete')"
+            value={m.title}
+            onChange={(e) => handleUpdate(i, "title", e.target.value)}
+          />
+
+          <textarea
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+            placeholder="What will be completed and how will you prove it?"
+            rows={2}
+            value={m.description}
+            onChange={(e) => handleUpdate(i, "description", e.target.value)}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Target Amount (ETH)</label>
               <input
-                className="w-full mb-2 p-2 border-b outline-none font-semibold"
-                placeholder="Milestone Title"
-                value={m.title}
-                onChange={(e) => handleUpdate(i, "title", e.target.value)}
+                type="number"
+                step="0.001"
+                min="0.001"
+                className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="0.5"
+                value={m.targetEth}
+                onChange={(e) => handleUpdate(i, "targetEth", e.target.value)}
               />
-              <div className="flex gap-4">
-                <input
-                  type="number"
-                  className="w-1/2 p-2 bg-gray-50 rounded"
-                  placeholder="Target ETH"
-                  value={m.targetEth}
-                  onChange={(e) => handleUpdate(i, "targetEth", e.target.value)}
-                />
-                <input
-                  type="number"
-                  className="w-1/2 p-2 bg-gray-50 rounded"
-                  placeholder="Days"
-                  value={m.durationDays}
-                  onChange={(e) => handleUpdate(i, "durationDays", e.target.value)}
-                />
-              </div>
             </div>
-          ))}
-          <div className="flex gap-4 pt-4">
-            <button onClick={handleAddMs} className="flex-1 border-2 border-indigo-600 text-indigo-600 font-bold py-2 rounded-lg">+ Add Another</button>
-            <button onClick={handleSaveAll} className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg">Save All Milestones</button>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Duration (days)</label>
+              <input
+                type="number"
+                min="1"
+                className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="30"
+                value={m.durationDays}
+                onChange={(e) => handleUpdate(i, "durationDays", e.target.value)}
+              />
+            </div>
           </div>
         </div>
-      )}
+      ))}
+
+      <div className="flex gap-3 pt-2">
+        <button
+          onClick={handleSaveAll}
+          disabled={creatingMs}
+          className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition-colors disabled:cursor-not-allowed"
+        >
+          {creatingMs ? "Submitting..." : `Save ${milestones.filter(m => m.title).length || ""} Milestone${milestones.length !== 1 ? "s" : ""} to Blockchain`}
+        </button>
+        {onDone && (
+          <button
+            onClick={onDone}
+            className="px-5 py-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium transition-colors"
+          >
+            Done
+          </button>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+        Each milestone is a separate on-chain transaction. MetaMask will prompt once per milestone.
+      </p>
     </div>
   );
 }

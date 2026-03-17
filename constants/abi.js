@@ -58,17 +58,22 @@ export const MILESTONE_MANAGER_ABI = [
   {
     name: "getMilestone", type: "function", stateMutability: "view",
     inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }],
-    outputs: [{ name: "", type: "tuple", components: [
-      { name: "id", type: "uint256" }, { name: "campaignId", type: "uint256" }, { name: "title", type: "string" }, { name: "description", type: "string" }, { name: "targetAmount", type: "uint256" }, { name: "raisedAmount", type: "uint256" }, { name: "deadline", type: "uint256" }, { name: "status", type: "uint8" }, { name: "evidenceIpfsHash", type: "string" }, { name: "evidenceUrl", type: "string" }, { name: "totalVotesFor", type: "uint256" }, { name: "totalVotesAgainst", type: "uint256" }, { name: "contributorsCount", type: "uint256" }, { name: "fundsReleased", type: "bool" }
-    ]}]
+    outputs: [{
+      name: "", type: "tuple", components: [
+        { name: "id", type: "uint256" }, { name: "campaignId", type: "uint256" }, { name: "title", type: "string" }, { name: "description", type: "string" }, { name: "targetAmount", type: "uint256" }, { name: "raisedAmount", type: "uint256" }, { name: "deadline", type: "uint256" }, { name: "status", type: "uint8" }, { name: "evidenceIpfsHash", type: "string" }, { name: "evidenceUrl", type: "string" }, { name: "totalVotesFor", type: "uint256" }, { name: "totalVotesAgainst", type: "uint256" }, { name: "contributorsCount", type: "uint256" }, { name: "fundsReleased", type: "bool" }
+      ]
+    }]
   },
   {
     name: "getCampaignMilestones", type: "function", stateMutability: "view",
     inputs: [{ name: "_campaignId", type: "uint256" }],
-    outputs: [{ name: "", type: "tuple[]", components: [
-      { name: "id", type: "uint256" }, { name: "campaignId", type: "uint256" }, { name: "title", type: "string" }, { name: "description", type: "string" }, { name: "targetAmount", type: "uint256" }, { name: "raisedAmount", type: "uint256" }, { name: "deadline", type: "uint256" }, { name: "status", type: "uint8" }, { name: "evidenceIpfsHash", type: "string" }, { name: "evidenceUrl", type: "string" }, { name: "totalVotesFor", type: "uint256" }, { name: "totalVotesAgainst", type: "uint256" }, { name: "contributorsCount", type: "uint256" }, { name: "fundsReleased", type: "bool" }
-    ]}]
+    outputs: [{
+      name: "", type: "tuple[]", components: [
+        { name: "id", type: "uint256" }, { name: "campaignId", type: "uint256" }, { name: "title", type: "string" }, { name: "description", type: "string" }, { name: "targetAmount", type: "uint256" }, { name: "raisedAmount", type: "uint256" }, { name: "deadline", type: "uint256" }, { name: "status", type: "uint8" }, { name: "evidenceIpfsHash", type: "string" }, { name: "evidenceUrl", type: "string" }, { name: "totalVotesFor", type: "uint256" }, { name: "totalVotesAgainst", type: "uint256" }, { name: "contributorsCount", type: "uint256" }, { name: "fundsReleased", type: "bool" }
+      ]
+    }]
   },
   { name: "getContribution", type: "function", stateMutability: "view", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }, { name: "_contributor", type: "address" }], outputs: [{ name: "", type: "uint256" }] },
-  { name: "getVote", type: "function", stateMutability: "view", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }, { name: "_voter", type: "address" }], outputs: [{ components: [{ name: "hasVoted", type: "bool" }, { name: "inFavour", type: "bool" }, { name: "weight", type: "uint256" }], name: "", type: "tuple" }] }
+  { name: "getVote", type: "function", stateMutability: "view", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }, { name: "_voter", type: "address" }], outputs: [{ components: [{ name: "hasVoted", type: "bool" }, { name: "inFavour", type: "bool" }, { name: "weight", type: "uint256" }], name: "", type: "tuple" }] },
+  { name: "isCampaignRegistered", type: "function", stateMutability: "view", inputs: [{ name: "_campaignId", type: "uint256" }], outputs: [{ name: "", type: "bool" }] }
 ];

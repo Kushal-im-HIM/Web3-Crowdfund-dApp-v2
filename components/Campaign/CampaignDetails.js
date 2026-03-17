@@ -4,73 +4,59 @@ import { useAccount, useContractRead } from "wagmi";
 import { ethers } from "ethers";
 import { toast } from "react-hot-toast";
 import {
-  FiUser,
-  FiClock,
-  FiTarget,
-  FiTrendingUp,
-  FiShare2,
-  FiHeart,
-  FiUsers,
-  FiCalendar,
+  FiUser, FiClock, FiTarget, FiShare2,
+  FiHeart, FiUsers, FiCalendar, FiFlag,
+  FiPlusCircle,
 } from "react-icons/fi";
 import { useContract } from "../../hooks/useContract";
 import { getFromIPFS } from "../../utils/ipfs";
 import {
-  formatEther,
-  formatAddress,
-  calculateTimeLeft,
-  calculateProgress,
-  formatDate,
-  copyToClipboard,
+  formatEther, formatAddress, calculateTimeLeft,
+  calculateProgress, formatDate, copyToClipboard,
 } from "../../utils/helpers";
 import { CONTRACT_ADDRESS } from "../../constants";
 import { CROWDFUNDING_ABI } from "../../constants/abi";
-
-// Milestone Integration
 import MilestonePanel from "../Milestone/MilestonePanel";
+import MilestoneCreationForm from "../Milestone/MilestoneCreationForm";
 
 export default function CampaignDetails({ campaignId }) {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-
   const {
-    useCampaign,
-    useCampaignStats,
-    useContributeToCampaignSimple,
-    useWithdrawFunds,
-    useGetRefund,
-    useContribution,
-    STATUS_LABELS
+    useCampaign, useCampaignStats, useContributeToCampaignSimple,
+    useWithdrawFunds, useGetRefund, useContribution, useIsCampaignRegistered,
   } = useContract();
 
   const [metadata, setMetadata] = useState(null);
   const [contributionAmount, setContributionAmount] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [showMilestoneSetup, setShowMilestoneSetup] = useState(false);
 
   const { data: campaign, isLoading: campaignLoading } = useCampaign(campaignId);
-  const { data: stats } = useCampaignStats(campaignId);
   const { data: userContribution } = useContribution(campaignId, address);
   const { contribute, isLoading: contributing } = useContributeToCampaignSimple();
   const { withdrawFunds, isLoading: withdrawing } = useWithdrawFunds();
   const { getRefund, isLoading: refunding } = useGetRefund();
 
-  const { data: contributions, isLoading: loadingContributions } =
-    useContractRead({
-      address: CONTRACT_ADDRESS,
-      abi: CROWDFUNDING_ABI,
-      functionName: "getCampaignContributions",
-      args: [campaignId],
-      enabled: Boolean(campaignId && CONTRACT_ADDRESS),
-      watch: true,
-    });
+  // Check if this campaign has milestone system enabled
+  const { data: isMilestoneRegistered, refetch: refetchRegistered } =
+    useIsCampaignRegistered(campaignId);
+
+  const { data: contributions, isLoading: loadingContributions } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: CROWDFUNDING_ABI,
+    functionName: "getCampaignContributions",
+    args: [campaignId],
+    enabled: Boolean(campaignId && CONTRACT_ADDRESS),
+    watch: true,
+    cacheTime: 30000,
+  });
 
   useEffect(() => {
     const fetchMetadata = async () => {
       if (campaign?.metadataHash) {
         const result = await getFromIPFS(campaign.metadataHash);
-        if (result.success) {
-          setMetadata(result.data);
-        }
+        if (result.success) setMetadata(result.data);
       }
     };
     fetchMetadata();
@@ -79,7 +65,7 @@ export default function CampaignDetails({ campaignId }) {
   if (campaignLoading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500" />
       </div>
     );
   }
@@ -87,8 +73,9 @@ export default function CampaignDetails({ campaignId }) {
   if (!campaign) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-2xl font-bold mb-4 text-white">Campaign Not Found</h2>
-        <button onClick={() => router.push("/campaigns")} className="bg-blue-500 text-white px-6 py-2 rounded-lg">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Campaign Not Found</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">The campaign you're looking for doesn't exist or has been removed.</p>
+        <button onClick={() => router.push("/campaigns")} className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
           Browse Campaigns
         </button>
       </div>
@@ -104,138 +91,326 @@ export default function CampaignDetails({ campaignId }) {
   const canWithdraw = isCreator && timeLeft.expired && isSuccessful && !campaign.withdrawn;
   const canGetRefund = !isCreator && timeLeft.expired && !isSuccessful && userContribution > 0;
 
-  const processedContributions = contributions ? contributions.map((c) => ({
-    contributor: c.contributor,
-    amount: c.amount,
-    timestamp: c.timestamp ? Number(c.timestamp.toString()) : null,
-  })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
+  // Contributions processing
+  const processedContributions = contributions
+    ? contributions.map((c) => ({
+      contributor: c.contributor,
+      amount: c.amount,
+      timestamp: c.timestamp ? Number(c.timestamp.toString()) : null,
+    })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    : [];
 
   const contributorSummary = processedContributions.reduce((acc, c) => {
     const addr = c.contributor;
-    if (!acc[addr]) acc[addr] = { address: addr, totalAmount: 0n, count: 0 };
+    if (!acc[addr]) acc[addr] = { address: addr, totalAmount: 0n, contributionCount: 0, lastContribution: c.timestamp };
     acc[addr].totalAmount += BigInt(c.amount.toString());
-    acc[addr].count += 1;
+    acc[addr].contributionCount += 1;
+    if (c.timestamp && c.timestamp > acc[addr].lastContribution) acc[addr].lastContribution = c.timestamp;
     return acc;
   }, {});
-
   const uniqueContributors = Object.values(contributorSummary).sort((a, b) => Number(b.totalAmount - a.totalAmount));
 
   const handleContribute = async () => {
-    if (!contributionAmount || parseFloat(contributionAmount) <= 0) return toast.error("Invalid amount");
-    await contribute?.({
-      args: [campaignId],
-      value: ethers.utils.parseEther(contributionAmount),
-    });
-    setContributionAmount("");
+    if (!contributionAmount || parseFloat(contributionAmount) <= 0) {
+      return toast.error("Please enter a valid contribution amount");
+    }
+    try {
+      await contribute?.({ args: [campaignId], value: ethers.utils.parseEther(contributionAmount) });
+      setContributionAmount("");
+    } catch (err) { console.error("Contribution error:", err); }
+  };
+
+  const handleShare = async () => {
+    const success = await copyToClipboard(window.location.href);
+    success ? toast.success("Link copied!") : toast.error("Failed to copy link");
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-24 px-4">
-      {/* ── Main Campaign Header ── */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
-        <div className="relative h-64 md:h-96 bg-[#111827]">
-          {metadata?.image ? (
-            <img src={metadata.image} alt={campaign.title} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-gray-700 opacity-20">{campaign.title}</div>
-          )}
-          <div className="absolute top-4 left-4">
-            <span className={`px-4 py-1.5 rounded-full text-xs font-bold tracking-widest ${campaign.active ? "bg-green-500/20 text-green-400 border border-green-500/50" : "bg-red-500/20 text-red-400 border border-red-500/50"}`}>
-              {campaign.active ? "ACTIVE" : "INACTIVE"}
-            </span>
-          </div>
-        </div>
+    <div className="max-w-6xl mx-auto space-y-6 pb-16">
 
-        <div className="p-8 flex flex-col lg:flex-row gap-10">
-          <div className="flex-1 space-y-6">
-            <h1 className="text-4xl font-extrabold text-white tracking-tight">{campaign.title}</h1>
-            <p className="text-gray-400 text-lg leading-relaxed">{campaign.description}</p>
+      {/* ── Campaign Hero Card ─────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
 
-            <div className="flex items-center gap-4 p-4 bg-[#111827] rounded-xl border border-gray-800">
-              <div className="w-12 h-12 bg-blue-600/20 rounded-full flex items-center justify-center text-blue-400 border border-blue-500/30"><FiUser size={24} /></div>
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Project Creator</p>
-                <p className="text-sm font-mono text-gray-300">{formatAddress(campaign.creator)} {isCreator && <span className="text-blue-400 ml-1">(You)</span>}</p>
-              </div>
+        {/* Image */}
+        <div className="relative h-64 md:h-80 bg-gradient-to-r from-blue-500 to-purple-600">
+          {metadata?.image
+            ? <img src={metadata.image} alt={campaign.title} className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center text-white text-8xl font-bold opacity-20">{campaign.title?.charAt(0) || "C"}</div>
+          }
+          <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
+            <div className="flex gap-2">
+              <span className={`px-3 py-1 text-xs font-bold rounded-full backdrop-blur-sm ${campaign.active ? "bg-green-500/80 text-white" : "bg-red-500/80 text-white"}`}>
+                {campaign.active ? "ACTIVE" : "INACTIVE"}
+              </span>
+              {isSuccessful && (
+                <span className="px-3 py-1 text-xs font-bold bg-yellow-500/80 text-white rounded-full backdrop-blur-sm">FUNDED</span>
+              )}
             </div>
-          </div>
-
-          <div className="lg:w-96 space-y-6 bg-[#111827] p-8 rounded-2xl border border-gray-800 shadow-inner">
-            <div className="space-y-3">
-              <div className="flex justify-between items-end"><span className="text-sm text-gray-400 font-bold">Funding Progress</span><span className="text-xl font-black text-white">{progress.toFixed(1)}%</span></div>
-              <div className="w-full bg-gray-800 h-3 rounded-full overflow-hidden"><div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-1000" style={{ width: `${Math.min(progress, 100)}%` }} /></div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-[#1a1f2e] p-4 rounded-xl border border-gray-800"><p className="text-2xl font-black text-white">{raisedAmount}</p><p className="text-[10px] uppercase tracking-tighter text-gray-500 font-bold">ETH Raised</p></div>
-              <div className="bg-[#1a1f2e] p-4 rounded-xl border border-gray-800"><p className="text-2xl font-black text-white">{targetAmount}</p><p className="text-[10px] uppercase tracking-tighter text-gray-500 font-bold">Target</p></div>
-            </div>
-
-            {!timeLeft.expired && campaign.active && !isCreator && isConnected && (
-              <div className="space-y-4 pt-2">
-                <div className="relative">
-                  <input type="number" step="0.01" value={contributionAmount} onChange={(e) => setContributionAmount(e.target.value)} className="w-full bg-[#1a1f2e] border border-gray-700 rounded-xl p-4 text-white placeholder-gray-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="0.00 ETH" />
-                  <span className="absolute right-4 top-4 text-gray-500 font-bold">ETH</span>
-                </div>
-                <button onClick={handleContribute} disabled={contributing} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-black text-lg shadow-lg shadow-blue-900/20 transition-all active:scale-[0.98]">
-                  {contributing ? "Processing..." : "Support Project"}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Milestone Section ── */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-2xl p-8 shadow-xl">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-2 h-8 bg-indigo-500 rounded-full"></div>
-          <h3 className="text-2xl font-black text-white">Project Roadmap & Milestones</h3>
-        </div>
-        <MilestonePanel campaignId={campaignId} creatorAddress={campaign.creator} />
-      </div>
-
-      {/* ── Tabs Section ── */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-2xl p-8 shadow-xl">
-        <div className="flex space-x-10 border-b border-gray-800 mb-8">
-          {["overview", "contributors"].map((t) => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`pb-4 text-sm font-black uppercase tracking-widest transition-all ${activeTab === t ? "border-b-4 border-blue-500 text-blue-500" : "text-gray-500 hover:text-gray-300"}`}>
-              {t}
+            <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/30 transition-all">
+              <FiShare2 className="w-4 h-4 text-white" />
             </button>
-          ))}
+          </div>
         </div>
 
-        {activeTab === "overview" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="space-y-6">
-              <h4 className="text-indigo-400 font-black uppercase text-xs tracking-[0.2em]">Campaign Stats</h4>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 text-gray-300"><FiCalendar className="text-gray-500" /> <span className="text-gray-500 w-20">Created:</span> {formatDate(campaign.createdAt)}</div>
-                <div className="flex items-center gap-3 text-gray-300"><FiClock className="text-gray-500" /> <span className="text-gray-500 w-20">Deadline:</span> {formatDate(campaign.deadline)}</div>
+        {/* Info */}
+        <div className="p-6 md:p-8">
+          <div className="flex flex-col lg:flex-row lg:gap-10">
+
+            {/* Left */}
+            <div className="flex-1 space-y-5">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">{campaign.title}</h1>
+                <p className="text-gray-600 dark:text-gray-400 text-base leading-relaxed">{campaign.description}</p>
+              </div>
+
+              <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/60 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div className="w-10 h-10 bg-blue-500/20 dark:bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/30">
+                  <FiUser className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold tracking-wide">Project Creator</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white font-mono">
+                    {formatAddress(campaign.creator)}
+                    {isCreator && <span className="ml-2 text-blue-500 font-sans">(You)</span>}
+                  </p>
+                </div>
               </div>
             </div>
+
+            {/* Right — Stats & Actions */}
+            <div className="lg:w-80 mt-6 lg:mt-0">
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600 space-y-5">
+
+                {/* Progress bar */}
+                <div>
+                  <div className="flex justify-between text-sm mb-1.5">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">Progress</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{progress.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2.5 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(progress, 100)}%` }} />
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { val: parseFloat(raisedAmount).toFixed(3), label: "ETH Raised" },
+                    { val: parseFloat(targetAmount).toFixed(3), label: "ETH Target" },
+                    { val: uniqueContributors.length, label: "Backers" },
+                    { val: timeLeft.expired ? "Ended" : timeLeft.text?.split(" ")[0] ?? "—", label: timeLeft.expired ? "" : "Days Left" },
+                  ].map(({ val, label }, i) => (
+                    <div key={i} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600 text-center">
+                      <p className="text-xl font-bold text-gray-900 dark:text-white">{val}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Contribute input */}
+                {!timeLeft.expired && campaign.active && !isCreator && isConnected && (
+                  <div className="space-y-2">
+                    <input type="number" step="0.01" min="0.01" placeholder="0.00 ETH"
+                      value={contributionAmount} onChange={(e) => setContributionAmount(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <button onClick={handleContribute} disabled={contributing || !contributionAmount}
+                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-semibold py-3 rounded-lg transition-all disabled:cursor-not-allowed">
+                      {contributing ? "Processing..." : "Contribute Now"}
+                    </button>
+                  </div>
+                )}
+
+                {canWithdraw && (
+                  <button onClick={() => withdrawFunds?.({ args: [campaignId] })} disabled={withdrawing}
+                    className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors disabled:cursor-not-allowed">
+                    {withdrawing ? "Withdrawing..." : "Withdraw Funds"}
+                  </button>
+                )}
+
+                {canGetRefund && (
+                  <button onClick={() => getRefund?.({ args: [campaignId] })} disabled={refunding}
+                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors disabled:cursor-not-allowed">
+                    {refunding ? "Processing..." : "Get Refund"}
+                  </button>
+                )}
+
+                {!isConnected && (
+                  <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p className="text-yellow-800 dark:text-yellow-300 text-sm">Connect wallet to contribute</p>
+                  </div>
+                )}
+
+                {userContribution > 0 && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                      Your contribution: <span className="font-bold">{formatEther(userContribution)} ETH</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Milestones Section ─────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 md:p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <FiFlag className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Project Milestones</h2>
+          </div>
+
+          {/* Creator: show setup button if milestones not yet enabled */}
+          {isCreator && !isMilestoneRegistered && !showMilestoneSetup && (
+            <button
+              onClick={() => setShowMilestoneSetup(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              <FiPlusCircle className="w-4 h-4" />
+              Set Up Milestones
+            </button>
+          )}
+        </div>
+
+        {/* Creator setup form — inline on this page */}
+        {isCreator && showMilestoneSetup && (
+          <MilestoneCreationForm
+            campaignId={campaignId}
+            onDone={() => {
+              setShowMilestoneSetup(false);
+              refetchRegistered?.();
+            }}
+          />
+        )}
+
+        {/* Milestone list (or empty state) */}
+        {!showMilestoneSetup && (
+          <MilestonePanel campaignId={campaignId} creatorAddress={campaign.creator} />
+        )}
+
+        {/* Non-creator empty hint */}
+        {!isCreator && !isMilestoneRegistered && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+            The creator has not set up milestones for this campaign yet.
+          </p>
+        )}
+      </div>
+
+      {/* ── Tabs Section ──────────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 md:p-8">
+        <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+          <nav className="flex gap-8">
+            {["overview", "contributors"].map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`pb-3 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${activeTab === tab
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}>
+                {tab}
+                {tab === "contributors" && uniqueContributors.length > 0 && (
+                  <span className="ml-1.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold px-2 py-0.5 rounded-full">
+                    {uniqueContributors.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Overview tab */}
+        {activeTab === "overview" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Campaign Stats</h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center gap-3">
+                  <FiCalendar className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="text-gray-500 dark:text-gray-400 w-20">Created:</span>
+                  <span className="text-gray-900 dark:text-white">{formatDate(campaign.createdAt)}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <FiClock className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="text-gray-500 dark:text-gray-400 w-20">Deadline:</span>
+                  <span className="text-gray-900 dark:text-white">{formatDate(campaign.deadline)}</span>
+                </div>
+                {metadata?.category && (
+                  <div className="flex items-center gap-3">
+                    <FiTarget className="w-4 h-4 text-gray-400 shrink-0" />
+                    <span className="text-gray-500 dark:text-gray-400 w-20">Category:</span>
+                    <span className="text-gray-900 dark:text-white">{metadata.category}</span>
+                  </div>
+                )}
+                {metadata?.tags?.length > 0 && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-gray-500 dark:text-gray-400 w-20 shrink-0 mt-0.5">Tags:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {metadata.tags.map((tag, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {metadata?.additionalInfo && (
-              <div className="space-y-4">
-                <h4 className="text-indigo-400 font-black uppercase text-xs tracking-[0.2em]">Additional Details</h4>
-                <p className="text-gray-400 leading-relaxed italic border-l-4 border-gray-800 pl-6">{metadata.additionalInfo}</p>
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Additional Information</h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm border-l-4 border-gray-200 dark:border-gray-600 pl-4">
+                  {metadata.additionalInfo}
+                </p>
               </div>
             )}
           </div>
         )}
 
+        {/* Contributors tab */}
         {activeTab === "contributors" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {uniqueContributors.length > 0 ? uniqueContributors.map((c, i) => (
-              <div key={c.address} className="flex justify-between items-center p-5 bg-[#111827] border border-gray-800 rounded-2xl">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-gray-800 text-blue-400 rounded-full flex items-center justify-center font-black text-xs border border-gray-700">#{i + 1}</div>
-                  <p className="text-sm font-mono text-gray-300">{formatAddress(c.address)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-black text-white">{formatEther(c.totalAmount)} ETH</p>
-                </div>
+          <div>
+            {loadingContributions ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
               </div>
-            )) : <p className="text-gray-500 col-span-2 text-center py-10">No contributions yet. Be the first!</p>}
+            ) : uniqueContributors.length > 0 ? (
+              <div className="space-y-3">
+                {uniqueContributors.map((c, i) => (
+                  <div key={c.address}
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        #{i + 1}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white font-mono">
+                          {formatAddress(c.address)}
+                          {c.address.toLowerCase() === address?.toLowerCase() && (
+                            <span className="ml-2 text-blue-500 font-sans text-xs">(You)</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {c.contributionCount} contribution{c.contributionCount !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-gray-900 dark:text-white">{formatEther(c.totalAmount)} ETH</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {((Number(formatEther(c.totalAmount)) / Number(raisedAmount)) * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <FiUsers className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400">No contributors yet. Be the first to support this campaign!</p>
+              </div>
+            )}
           </div>
         )}
       </div>

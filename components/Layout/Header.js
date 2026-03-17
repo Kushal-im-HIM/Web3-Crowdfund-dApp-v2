@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 import { FiMenu, FiSun, FiMoon, FiBell, FiSearch } from "react-icons/fi";
+import { ACTIVE_NETWORK } from "../../constants";
 
 export default function Header({ onMenuToggle, isCollapsed }) {
   const [isDark, setIsDark] = useState(false);
@@ -86,12 +87,16 @@ export default function Header({ onMenuToggle, isCollapsed }) {
             </button>
           )}
 
-          {/* Network Status */}
-          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-              {process.env.NEXT_PUBLIC_NETWORK || "Unknown"}
-            </span>
+          {/* Network Badge */}
+          <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
+            ACTIVE_NETWORK.isLocalhost
+              ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+              : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+              ACTIVE_NETWORK.isLocalhost ? "bg-orange-500" : "bg-blue-500"
+            }`} />
+            {ACTIVE_NETWORK.isLocalhost ? "Localhost" : "Sepolia"}
           </div>
 
           {/* Connect Wallet Button */}

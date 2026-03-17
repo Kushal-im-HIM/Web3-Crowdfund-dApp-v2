@@ -59,11 +59,11 @@ export const useContract = () => {
   // ─── LEGACY READ FUNCTIONS (RESTORED) ───────────────────────────────────────
 
   const useCampaign = (id) => useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getCampaign", args: [id], enabled: !!id, watch: true });
-  
+
   const useActiveCampaigns = (offset = 0, limit = 10) => useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getActiveCampaigns", args: [offset, limit], watch: true });
-  
+
   const useUserCampaigns = (usr) => useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getUserCampaigns", args: [usr], enabled: !!usr, watch: true });
-  
+
   const useUserContributions = (usr) => useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getUserContributions", args: [usr], enabled: !!usr, watch: true });
 
   const useCampaignStats = (campaignId) => useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getCampaignStats", args: [campaignId], enabled: !!campaignId, watch: true });
@@ -108,14 +108,66 @@ export const useContract = () => {
   const useContributeToMilestone = () => makeMilestoneWrite("contributeToMilestone", "Contribution successful!");
   const useVoteMilestone = () => makeMilestoneWrite("voteMilestone", "Vote recorded!");
   const useWithdrawMilestone = () => makeMilestoneWrite("withdrawMilestoneFunds", "Funds released!");
+  const useClaimMilestoneRefund = () => makeMilestoneWrite("claimMilestoneRefund", "Refund claimed!");
+
+  // Read: how much ETH has the connected wallet contributed to a specific milestone?
+  const useMyMilestoneContribution = (campaignId, milestoneId) =>
+    useContractRead({
+      address: MILESTONE_MANAGER_ADDRESS,
+      abi: MILESTONE_MANAGER_ABI,
+      functionName: "getContribution",
+      args: [campaignId, milestoneId, address],
+      enabled: Boolean(campaignId !== undefined && milestoneId !== undefined && address && MILESTONE_MANAGER_ADDRESS),
+      watch: true,
+      cacheTime: 15000,
+    });
+
+  // Read: has the connected wallet voted + their vote details?
+  const useMyMilestoneVote = (campaignId, milestoneId) =>
+    useContractRead({
+      address: MILESTONE_MANAGER_ADDRESS,
+      abi: MILESTONE_MANAGER_ABI,
+      functionName: "getVote",
+      args: [campaignId, milestoneId, address],
+      enabled: Boolean(campaignId !== undefined && milestoneId !== undefined && address && MILESTONE_MANAGER_ADDRESS),
+      watch: true,
+      cacheTime: 15000,
+    });
+
+  // Write: submit evidence (upload IPFS hash + URL)
+  const useSubmitEvidence = () => {
+    const { write, writeAsync, isLoading, isSuccess, error } = useContractWrite({
+      address: MILESTONE_MANAGER_ADDRESS,
+      abi: MILESTONE_MANAGER_ABI,
+      functionName: "submitMilestoneEvidence",
+      onSuccess: () => toast.success("Evidence submitted! Oracle will verify shortly."),
+      onError: (err) => toast.error(err?.message || "Evidence submission failed"),
+    });
+    return { write, writeAsync, isLoading, isSuccess, error };
+  };
+
+  // Read: check if a campaign is registered in MilestoneManager
+  const useIsCampaignRegistered = (campaignId) =>
+    useContractRead({
+      address: MILESTONE_MANAGER_ADDRESS,
+      abi: MILESTONE_MANAGER_ABI,
+      functionName: "isCampaignRegistered",
+      args: [campaignId],
+      enabled: Boolean(campaignId !== undefined && MILESTONE_MANAGER_ADDRESS),
+      watch: true,
+      cacheTime: 15000,
+    });
 
   return {
     address, isConnected, STATUS_LABELS,
     // Original Crowdfunding
     useCreateCampaign, useCreateCampaignSimple, useContributeToCampaignSimple, useWithdrawFunds, useGetRefund,
     useCampaign, useActiveCampaigns, useUserCampaigns, useUserContributions, useContractStats, useMultipleCampaigns,
-    useCampaignStats, useContribution, // <--- ADDED THESE
-    // New Milestones
-    useCampaignMilestones, useRegisterCampaignForMilestones, useCreateMilestone, useContributeToMilestone, useVoteMilestone, useWithdrawMilestone
+    useCampaignStats, useContribution,
+    // Milestones — reads
+    useCampaignMilestones, useMyMilestoneContribution, useMyMilestoneVote, useIsCampaignRegistered,
+    // Milestones — writes
+    useRegisterCampaignForMilestones, useCreateMilestone, useContributeToMilestone,
+    useSubmitEvidence, useVoteMilestone, useWithdrawMilestone, useClaimMilestoneRefund,
   };
 };

@@ -1,56 +1,52 @@
-import {
-  getDefaultWallets,
-  connectorsForWallets,
-} from "@rainbow-me/rainbowkit";
+import { getDefaultWallets, connectorsForWallets } from "@rainbow-me/rainbowkit";
 import { configureChains, createConfig } from "wagmi";
+import { hardhat, sepolia } from "wagmi/chains";
 import { jsonRpcProvider } from "wagmi/providers/jsonRpc";
+import { publicProvider } from "wagmi/providers/public";
+import { ACTIVE_NETWORK } from "../constants";
 
-// 1. Pull dynamic values from .env.local
 const PROJECT_ID = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL;
-const CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID) || 1337;
-const CHAIN_NAME = process.env.NEXT_PUBLIC_CHAIN_NAME || "Localhost";
-const CHAIN_SYMBOL = process.env.NEXT_PUBLIC_CHAIN_SYMBOL || "ETH";
-const BLOCK_EXPLORER = process.env.NEXT_PUBLIC_BLOCK_EXPLORER;
 
-// 2. Define the chain dynamically
-const activeChain = {
-  id: CHAIN_ID,
-  name: CHAIN_NAME,
-  network: process.env.NEXT_PUBLIC_NETWORK || "localhost",
-  nativeCurrency: {
-    name: CHAIN_SYMBOL,
-    symbol: CHAIN_SYMBOL,
-    decimals: 18,
-  },
+// ─── Pick the right chain object ─────────────────────────────────────────
+// wagmi ships `hardhat` (chainId 31337) and `sepolia` (chainId 11155111) built-in.
+// For localhost we use the built-in `hardhat` chain so MetaMask auto-recognises it.
+const localhostChain = {
+  ...hardhat,
+  id: ACTIVE_NETWORK.chainId, // respect .env CHAIN_ID (may be 1337)
   rpcUrls: {
-    default: { http: [RPC_URL] },
-    public: { http: [RPC_URL] },
+    default: { http: [ACTIVE_NETWORK.rpcUrl || "http://127.0.0.1:8545"] },
+    public: { http: [ACTIVE_NETWORK.rpcUrl || "http://127.0.0.1:8545"] },
   },
-  blockExplorers: BLOCK_EXPLORER
-    ? {
-      default: {
-        name: process.env.NEXT_PUBLIC_BLOCK_EXPLORER_NAME || "Explorer",
-        url: BLOCK_EXPLORER,
-      },
-    }
-    : undefined,
-  testnet: true,
 };
 
-// 3. Configure Chains
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [activeChain], // This now follows your .env.local settings
-  [
-    jsonRpcProvider({
-      rpc: (chain) => ({
-        http: RPC_URL,
-      }),
-    }),
+const sepoliaChain = {
+  ...sepolia,
+  rpcUrls: {
+    default: { http: [ACTIVE_NETWORK.rpcUrl || "https://rpc.sepolia.org"] },
+    public: { http: [ACTIVE_NETWORK.rpcUrl || "https://rpc.sepolia.org"] },
+  },
+};
+
+const activeChain = ACTIVE_NETWORK.isLocalhost ? localhostChain : sepoliaChain;
+
+// ─── Providers ───────────────────────────────────────────────────────────
+const providers = ACTIVE_NETWORK.isLocalhost
+  ? [
+    // Localhost: only use the local RPC — no public fallback needed
+    jsonRpcProvider({ rpc: () => ({ http: ACTIVE_NETWORK.rpcUrl || "http://127.0.0.1:8545" }) }),
   ]
+  : [
+    // Sepolia: use Alchemy RPC + public fallback
+    jsonRpcProvider({ rpc: () => ({ http: ACTIVE_NETWORK.rpcUrl }) }),
+    publicProvider(),
+  ];
+
+const { chains, publicClient, webSocketPublicClient } = configureChains(
+  [activeChain],
+  providers
 );
 
-// 4. Configure Wallets
+// ─── Wallets ─────────────────────────────────────────────────────────────
 const { wallets } = getDefaultWallets({
   appName: process.env.NEXT_PUBLIC_PLATFORM_NAME || "CrowdFund Pro",
   projectId: PROJECT_ID,
@@ -59,7 +55,7 @@ const { wallets } = getDefaultWallets({
 
 const connectors = connectorsForWallets(wallets);
 
-// 5. Export Config
+// ─── Export ──────────────────────────────────────────────────────────────
 export const config = createConfig({
   autoConnect: true,
   connectors,
