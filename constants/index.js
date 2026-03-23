@@ -38,7 +38,11 @@ export const PINATA_JWT = process.env.NEXT_PUBLIC_PINATA_JWT;
 export const PINATA_CONFIG = { pinataApiKey: PINATA_API_KEY, pinataSecretApiKey: PINATA_SECRET_KEY, pinataJWT: PINATA_JWT };
 
 // ─── App constants ────────────────────────────────────────────────────────
-export const CAMPAIGN_CREATION_FEE = "1000000000000000000"; // 1 ETH in wei
+// FIX (Issue #6): Was "1000000000000000000" (1 ETH) but the Solidity contract defines
+// CAMPAIGN_CREATION_FEE as 0.0001 ether (100000000000000 wei). Any frontend logic using
+// this constant for balance checks or display would show the wrong value.
+// Original: export const CAMPAIGN_CREATION_FEE = "1000000000000000000"; // 1 ETH in wei
+export const CAMPAIGN_CREATION_FEE = "100000000000000"; // 0.0001 ETH in wei — matches contract
 
 // Matches Solidity MilestoneStatus enum order exactly
 export const STATUS_LABELS = ["Pending", "Submitted", "Approved", "Rejected", "Released", "Refunded"];
@@ -50,6 +54,8 @@ export const SIDEBAR_ITEMS = [
   { id: "create", label: "Create Campaign", icon: "FiPlus", path: "/create-campaign" },
   { id: "my-campaigns", label: "My Campaigns", icon: "FiUser", path: "/my-campaigns" },
   { id: "contributions", label: "My Contributions", icon: "FiHeart", path: "/contributions" },
+  // New: Creator Transparency Dashboard
+  { id: "transparency", label: "Transparency", icon: "FiSearch", path: "/transparency" },
   { id: "admin", label: "Admin Panel", icon: "FiSettings", path: "/admin", adminOnly: true },
 ];
 

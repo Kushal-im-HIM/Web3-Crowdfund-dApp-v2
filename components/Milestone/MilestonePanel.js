@@ -163,15 +163,42 @@ function MilestoneCard({ milestone, campaignId, isCreator }) {
 
         {/* Backer: fund */}
         {statusLabel === "Pending" && !isCreator && (
-          <div className="flex items-center gap-3">
-            <input type="number" step="0.001" min="0.001" placeholder="0.1 ETH"
-              value={contribEth} onChange={(e) => setContribEth(e.target.value)}
-              className="border border-gray-300 dark:border-gray-600 rounded-lg p-2 text-sm w-36 focus:ring-2 focus:ring-indigo-500 outline-none dark:bg-gray-700 dark:text-white" />
-            <button disabled={contributing || !contribEth}
-              onClick={() => contribute({ args: [campaignId, milestone.id], value: ethers.utils.parseEther(contribEth || "0") })}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition">
-              {contributing ? "Processing..." : "Fund Milestone"}
-            </button>
+          <div className="flex flex-col gap-2">
+            {/* FIX (Issue #3): Show remaining milestone allowance so users see the cap */}
+            {(() => {
+              const remainingMs = Math.max(
+                0,
+                parseFloat(ethers.utils.formatEther(milestone.targetAmount || 0)) -
+                parseFloat(ethers.utils.formatEther(milestone.raisedAmount || 0))
+              );
+              return (
+                <>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Remaining: <span className="font-semibold">{remainingMs.toFixed(4)} ETH</span>
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <input type="number" step="0.001" min="0.001"
+                      // FIX (Issue #3): Prevent browser from accepting over-cap values
+                      max={remainingMs.toFixed(6)}
+                      placeholder="0.1 ETH"
+                      value={contribEth} onChange={(e) => setContribEth(e.target.value)}
+                      className="border border-gray-300 dark:border-gray-600 rounded-lg p-2 text-sm w-36 focus:ring-2 focus:ring-indigo-500 outline-none dark:bg-gray-700 dark:text-white" />
+                    <button disabled={contributing || !contribEth}
+                      onClick={() => {
+                        // FIX (Issue #3): Cap contribution amount to remaining allowance before sending.
+                        // Original: directly passed contribEth without any cap check.
+                        const parsed = parseFloat(contribEth || "0");
+                        const finalEth = Math.min(parsed, remainingMs);
+                        if (finalEth <= 0) return;
+                        contribute({ args: [campaignId, milestone.id], value: ethers.utils.parseEther(finalEth.toFixed(18)) });
+                      }}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition">
+                      {contributing ? "Processing..." : "Fund Milestone"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 

@@ -114,8 +114,25 @@ export default function CampaignDetails({ campaignId }) {
     if (!contributionAmount || parseFloat(contributionAmount) <= 0) {
       return toast.error("Please enter a valid contribution amount");
     }
+
+    // FIX (Issue #1): Guard against over-funding at the UI layer too.
+    // Even though the contract now enforces a cap and refunds excess, we should warn
+    // the user and auto-correct the value so they don't pay unnecessary gas for a tx
+    // where most of their ETH would be immediately refunded.
+    const remainingEth = parseFloat(targetAmount) - parseFloat(raisedAmount);
+    if (remainingEth <= 0) {
+      return toast.error("This campaign has already reached its funding target.");
+    }
+    let finalAmount = parseFloat(contributionAmount);
+    if (finalAmount > remainingEth) {
+      // Auto-cap and inform the user rather than silently over-sending.
+      toast("Your amount was adjusted to the remaining allowance: " + remainingEth.toFixed(6) + " ETH", { icon: "ℹ️" });
+      finalAmount = remainingEth;
+      setContributionAmount(remainingEth.toFixed(6));
+    }
+
     try {
-      await contribute?.({ args: [campaignId], value: ethers.utils.parseEther(contributionAmount) });
+      await contribute?.({ args: [campaignId], value: ethers.utils.parseEther(finalAmount.toFixed(18)) });
       setContributionAmount("");
     } catch (err) { console.error("Contribution error:", err); }
   };
@@ -211,11 +228,31 @@ export default function CampaignDetails({ campaignId }) {
                 {/* Contribute input */}
                 {!timeLeft.expired && campaign.active && !isCreator && isConnected && (
                   <div className="space-y-2">
-                    <input type="number" step="0.01" min="0.01" placeholder="0.00 ETH"
-                      value={contributionAmount} onChange={(e) => setContributionAmount(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg text-sm bg-white dark:bg-primary-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-secondary-500 outline-none" />
-                    <button onClick={handleContribute} disabled={contributing || !contributionAmount}
-                      className="w-full bg-gradient-emerald hover:shadow-emerald-glow disabled:from-gray-400 disabled:to-gray-400 text-white font-semibold py-3 rounded-lg transition-all disabled:cursor-not-allowed">
+                    {/* FIX (Issue #1): Show remaining allowance so users know the cap */}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Remaining:{" "}
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                        {Math.max(0, parseFloat(targetAmount) - parseFloat(raisedAmount)).toFixed(4)} ETH
+                      </span>
+                    </p>
+
+                    {/* FIX (Issue #1): max attribute prevents browser from accepting more than allowed. */}
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={Math.max(0, parseFloat(targetAmount) - parseFloat(raisedAmount)).toFixed(6)}
+                      placeholder="0.00 ETH"
+                      value={contributionAmount}
+                      onChange={(e) => setContributionAmount(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg text-sm bg-white dark:bg-primary-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-secondary-500 outline-none"
+                    />
+
+                    <button
+                      onClick={handleContribute}
+                      disabled={contributing || !contributionAmount}
+                      className="w-full bg-gradient-emerald hover:shadow-emerald-glow disabled:from-gray-400 disabled:to-gray-400 text-white font-semibold py-3 rounded-lg transition-all disabled:cursor-not-allowed"
+                    >
                       {contributing ? "Processing..." : "Contribute Now"}
                     </button>
                   </div>
@@ -278,6 +315,10 @@ export default function CampaignDetails({ campaignId }) {
         {isCreator && showMilestoneSetup && (
           <MilestoneCreationForm
             campaignId={campaignId}
+            // FIX (Issue #7): campaignTarget was not passed, so MilestoneCreationForm
+            // could not call the updated registerCampaign(id, target) nor validate
+            // that milestone sums stay within the campaign goal.
+            campaignTarget={targetAmount}
             onDone={() => {
               setShowMilestoneSetup(false);
               refetchRegistered?.();
@@ -373,22 +414,22 @@ export default function CampaignDetails({ campaignId }) {
           <div>
             {loadingContributions ? (
               <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
               </div>
             ) : uniqueContributors.length > 0 ? (
               <div className="space-y-3">
                 {uniqueContributors.map((c, i) => (
                   <div key={c.address}
-                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-primary-900/50 border border-gray-100 dark:border-primary-700 rounded-lg hover:bg-gray-100 dark:hover:bg-primary-700/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                      <div className="w-9 h-9 bg-gradient-emerald rounded-full flex items-center justify-center text-white text-xs font-bold">
                         #{i + 1}
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900 dark:text-white font-mono">
                           {formatAddress(c.address)}
                           {c.address.toLowerCase() === address?.toLowerCase() && (
-                            <span className="ml-2 text-blue-500 font-sans text-xs">(You)</span>
+                            <span className="ml-2 text-emerald-500 font-sans text-xs">(You)</span>
                           )}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -407,7 +448,7 @@ export default function CampaignDetails({ campaignId }) {
               </div>
             ) : (
               <div className="text-center py-12">
-                <FiUsers className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                <FiUsers className="w-12 h-12 text-gray-300 dark:text-primary-600 mx-auto mb-3" />
                 <p className="text-gray-500 dark:text-gray-400">No contributors yet. Be the first to support this campaign!</p>
               </div>
             )}

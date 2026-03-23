@@ -14,7 +14,11 @@ export const useContract = () => {
     const { config, error: prepareError } = usePrepareContractWrite({
       address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "createCampaign",
       args: title ? [title, description, metadataHash, targetAmount, duration] : undefined,
-      value: title ? ethers.utils.parseEther("1") : undefined,
+      // FIX (Issue #6): Was ethers.utils.parseEther("1") — 1 ETH hardcoded, which is 10,000x the
+      // actual contract fee of 0.0001 ETH. This would drain 1 ETH from every campaign creator.
+      // Corrected to the exact contract constant: 0.0001 ETH = 100000000000000 wei.
+      // Original: value: title ? ethers.utils.parseEther("1") : undefined,
+      value: title ? ethers.utils.parseEther("0.0001") : undefined,
       enabled: Boolean(address && CONTRACT_ADDRESS && title),
     });
     const { write, writeAsync, isLoading, isSuccess, error } = useContractWrite({

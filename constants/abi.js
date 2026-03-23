@@ -48,7 +48,12 @@ export const CROWDFUNDING_ABI = [
 ];
 
 export const MILESTONE_MANAGER_ABI = [
-  { name: "registerCampaign", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_campaignId", type: "uint256" }], outputs: [] },
+  // FIX: registerCampaign now takes a second argument _campaignTarget (uint256 wei).
+  // The old single-param ABI caused a viem "params/values length mismatch" error on every
+  // "Enable Milestones" click, which in turn left campaignCreator[id] unset and made every
+  // subsequent createMilestone call revert with "not campaign creator".
+  // Original: inputs: [{ name: "_campaignId", type: "uint256" }]
+  { name: "registerCampaign", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_campaignTarget", type: "uint256" }], outputs: [] },
   { name: "createMilestone", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_title", type: "string" }, { name: "_description", type: "string" }, { name: "_targetAmount", type: "uint256" }, { name: "_duration", type: "uint256" }], outputs: [] },
   { name: "contributeToMilestone", type: "function", stateMutability: "payable", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }], outputs: [] },
   { name: "submitMilestoneEvidence", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }, { name: "_ipfsHash", type: "string" }, { name: "_url", type: "string" }], outputs: [] },

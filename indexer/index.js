@@ -11,7 +11,7 @@
 
 require("dotenv").config();
 const { ethers } = require("ethers");
-const express    = require("express");
+const express = require("express");
 
 // ─── ABI ────────────────────────────────────────────────────────────────────
 const ABI = [
@@ -26,13 +26,13 @@ const ABI = [
   "function getCampaignMilestones(uint256 campaignId) external view returns (tuple(uint256 id, uint256 campaignId, string title, string description, uint256 targetAmount, uint256 raisedAmount, uint256 deadline, uint8 status, string evidenceIpfsHash, string evidenceUrl, uint256 totalVotesFor, uint256 totalVotesAgainst, uint256 contributorsCount, bool fundsReleased)[])",
 ];
 
-const STATUS_NAMES = ["Pending","Submitted","Approved","Rejected","Released","Refunded"];
+const STATUS_NAMES = ["Pending", "Submitted", "Approved", "Rejected", "Released", "Refunded"];
 
 // ─── In-memory store ─────────────────────────────────────────────────────────
 // milestones[campaignId][milestoneId] = { ...fields, votes: [] }
 const store = {
   milestones: {},    // campaignId -> milestoneId -> milestone object
-  campaigns:  {},    // campaignId -> { creator, milestoneIds: [] }
+  campaigns: {},    // campaignId -> { creator, milestoneIds: [] }
 };
 
 function ensureCampaign(campaignId) {
@@ -43,7 +43,7 @@ function ensureCampaign(campaignId) {
 
 function ensureMilestone(campaignId, milestoneId) {
   const cid = campaignId.toString();
-  const mid  = milestoneId.toString();
+  const mid = milestoneId.toString();
   if (!store.milestones[cid]) store.milestones[cid] = {};
   if (!store.milestones[cid][mid]) {
     store.milestones[cid][mid] = {
@@ -70,9 +70,9 @@ function onCampaignRegistered(campaignId, creator) {
 
 function onMilestoneCreated(campaignId, milestoneId, title, targetAmount, deadline) {
   const m = ensureMilestone(campaignId, milestoneId);
-  m.title        = title;
+  m.title = title;
   m.targetAmount = targetAmount.toString();
-  m.deadline     = Number(deadline);
+  m.deadline = Number(deadline);
   console.log(`[idx] MilestoneCreated ${campaignId}-${milestoneId}: ${title}`);
 }
 
@@ -85,33 +85,41 @@ function onMilestoneFunded(campaignId, milestoneId, contributor, amount) {
 
 function onMilestoneSubmitted(campaignId, milestoneId, ipfsHash, url) {
   const m = ensureMilestone(campaignId, milestoneId);
-  m.status           = "Submitted";
-  m.statusCode       = 1;
+  m.status = "Submitted";
+  m.statusCode = 1;
   m.evidenceIpfsHash = ipfsHash;
-  m.evidenceUrl      = url;
+  m.evidenceUrl = url;
   console.log(`[idx] MilestoneSubmitted ${campaignId}-${milestoneId}`);
 }
 
 function onMilestoneApproved(campaignId, milestoneId, approver) {
   const m = ensureMilestone(campaignId, milestoneId);
-  m.status     = "Approved";
+  m.status = "Approved";
   m.statusCode = 2;
-  m.approver   = approver;
+  m.approver = approver;
   console.log(`[idx] MilestoneApproved ${campaignId}-${milestoneId}`);
 }
 
-function onMilestoneRejected(campaignId, milestoneId) {
+// FIX (Issue #8): The MilestoneRejected event has three arguments:
+//   MilestoneRejected(uint256 campaignId, uint256 milestoneId, address rejecter)
+// The original handler only declared two parameters (campaignId, milestoneId), which means
+// the ethers event listener would pass `rejecter` as a third argument that was silently ignored.
+// While this doesn't corrupt the status update here, it is semantically wrong and prevents
+// storing the rejecter address for audit purposes.
+// Original: function onMilestoneRejected(campaignId, milestoneId) {
+function onMilestoneRejected(campaignId, milestoneId, rejecter) {
   const m = ensureMilestone(campaignId, milestoneId);
-  m.status     = "Rejected";
+  m.status = "Rejected";
   m.statusCode = 3;
-  console.log(`[idx] MilestoneRejected ${campaignId}-${milestoneId}`);
+  m.rejecter = rejecter; // FIX: store rejecter address (was silently dropped)
+  console.log(`[idx] MilestoneRejected ${campaignId}-${milestoneId} by ${rejecter}`);
 }
 
 function onMilestoneReleased(campaignId, milestoneId, amount) {
   const m = ensureMilestone(campaignId, milestoneId);
-  m.status       = "Released";
-  m.statusCode   = 4;
-  m.amountPaid   = amount.toString();
+  m.status = "Released";
+  m.statusCode = 4;
+  m.amountPaid = amount.toString();
   console.log(`[idx] MilestoneReleased ${campaignId}-${milestoneId}`);
 }
 
@@ -130,7 +138,7 @@ function onMilestoneVoted(campaignId, milestoneId, voter, inFavour, weight) {
 async function startIndexer(contract) {
   console.log("[idx] Catching up historical events...");
   const startBlock = parseInt(process.env.START_BLOCK || "0", 10);
-  const current    = await contract.provider.getBlockNumber();
+  const current = await contract.provider.getBlockNumber();
 
   const catchUp = async (eventName, handler) => {
     const events = await contract.queryFilter(contract.filters[eventName](), startBlock, current);
@@ -138,24 +146,24 @@ async function startIndexer(contract) {
   };
 
   await catchUp("CampaignRegistered", onCampaignRegistered);
-  await catchUp("MilestoneCreated",   onMilestoneCreated);
-  await catchUp("MilestoneFunded",    onMilestoneFunded);
+  await catchUp("MilestoneCreated", onMilestoneCreated);
+  await catchUp("MilestoneFunded", onMilestoneFunded);
   await catchUp("MilestoneSubmitted", onMilestoneSubmitted);
-  await catchUp("MilestoneApproved",  onMilestoneApproved);
-  await catchUp("MilestoneRejected",  onMilestoneRejected);
-  await catchUp("MilestoneReleased",  onMilestoneReleased);
-  await catchUp("MilestoneVoted",     onMilestoneVoted);
+  await catchUp("MilestoneApproved", onMilestoneApproved);
+  await catchUp("MilestoneRejected", onMilestoneRejected);
+  await catchUp("MilestoneReleased", onMilestoneReleased);
+  await catchUp("MilestoneVoted", onMilestoneVoted);
 
   console.log("[idx] Catch-up done. Starting live listener...");
 
   contract.on("CampaignRegistered", onCampaignRegistered);
-  contract.on("MilestoneCreated",   onMilestoneCreated);
-  contract.on("MilestoneFunded",    onMilestoneFunded);
+  contract.on("MilestoneCreated", onMilestoneCreated);
+  contract.on("MilestoneFunded", onMilestoneFunded);
   contract.on("MilestoneSubmitted", onMilestoneSubmitted);
-  contract.on("MilestoneApproved",  onMilestoneApproved);
-  contract.on("MilestoneRejected",  onMilestoneRejected);
-  contract.on("MilestoneReleased",  onMilestoneReleased);
-  contract.on("MilestoneVoted",     onMilestoneVoted);
+  contract.on("MilestoneApproved", onMilestoneApproved);
+  contract.on("MilestoneRejected", onMilestoneRejected);
+  contract.on("MilestoneReleased", onMilestoneReleased);
+  contract.on("MilestoneVoted", onMilestoneVoted);
 }
 
 // ─── REST API ────────────────────────────────────────────────────────────────

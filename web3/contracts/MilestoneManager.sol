@@ -71,6 +71,16 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
     /// @dev campaignId  => creator address (opt-in registration)
     mapping(uint256 => address) public campaignCreator;
 
+    // FIX (Issue #2): Store each campaign's funding target so milestone sums can be validated.
+    // Previously MilestoneManager had no knowledge of the campaign target, allowing milestone
+    // totals to exceed the campaign goal entirely.
+    /// @dev campaignId  => campaign target amount in wei (set at registration time)
+    mapping(uint256 => uint256) public campaignTarget;
+
+    // FIX (Issue #2): Track the sum of all milestone targets per campaign for cap enforcement.
+    /// @dev campaignId  => total ETH allocated across all milestones (wei)
+    mapping(uint256 => uint256) public totalMilestoneTarget;
+
     /// @dev campaignId  => milestoneId => contributor => amount
     mapping(uint256 => mapping(uint256 => mapping(address => uint256)))
         public milestoneContributions;
@@ -225,14 +235,31 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
     /**
      * @notice Campaign creator registers their existing campaign for milestone management.
      *         Must be called ONCE per campaign; caller becomes authoritative creator here.
-     * @param _campaignId  ID of the campaign in CrowdfundingMarketplace.
+     * @param _campaignId      ID of the campaign in CrowdfundingMarketplace.
+     * @param _campaignTarget  Campaign funding target in wei — used to validate milestone totals.
+     *
+     * FIX (Issue #2): Added _campaignTarget parameter. Previously registerCampaign() stored no
+     * target, making it impossible to validate that milestone amounts don't exceed the campaign goal.
+     * The creator supplies the target here (same value they used in createCampaign()).
      */
-    function registerCampaign(uint256 _campaignId) external {
+    function registerCampaign(
+        uint256 _campaignId,
+        uint256 _campaignTarget
+    ) external {
         require(
             campaignCreator[_campaignId] == address(0),
             "MilestoneManager: already registered"
         );
+        // FIX (Issue #2): Validate that a non-zero target is provided.
+        require(
+            _campaignTarget > 0,
+            "MilestoneManager: campaign target must be > 0"
+        );
+
         campaignCreator[_campaignId] = msg.sender;
+        // FIX (Issue #2): Persist campaign target for downstream milestone validation.
+        campaignTarget[_campaignId] = _campaignTarget;
+
         emit CampaignRegistered(_campaignId, msg.sender);
     }
 
@@ -258,6 +285,16 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
         require(_targetAmount > 0, "MilestoneManager: target must be > 0");
         require(_duration > 0, "MilestoneManager: duration must be > 0");
         require(bytes(_title).length > 0, "MilestoneManager: empty title");
+
+        // FIX (Issue #2): Ensure cumulative milestone targets never exceed the campaign goal.
+        // Previously there was no such check, allowing unlimited milestone creation.
+        uint256 newTotal = totalMilestoneTarget[_campaignId] + _targetAmount;
+        require(
+            newTotal <= campaignTarget[_campaignId],
+            "MilestoneManager: milestone targets would exceed campaign goal"
+        );
+        // FIX (Issue #2): Track running total of milestone targets.
+        totalMilestoneTarget[_campaignId] = newTotal;
 
         milestoneCount[_campaignId]++;
         uint256 mid = milestoneCount[_campaignId];
@@ -317,16 +354,45 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
             "MilestoneManager: creator cannot contribute"
         );
 
+        // FIX (Issue #3): Enforce hard cap at milestone targetAmount.
+        // Previously msg.value was accepted without bounds, mirroring the same flaw as in
+        // CrowdfundingMarketplace. Now we cap the accepted amount and refund the excess.
+        uint256 remainingAllowance = m.targetAmount > m.raisedAmount
+            ? m.targetAmount - m.raisedAmount
+            : 0;
+        require(
+            remainingAllowance > 0,
+            "MilestoneManager: milestone funding target already reached"
+        );
+
+        uint256 acceptedAmount = msg.value > remainingAllowance
+            ? remainingAllowance
+            : msg.value;
+        uint256 refundAmount = msg.value - acceptedAmount;
+
         if (
             milestoneContributions[_campaignId][_milestoneId][msg.sender] == 0
         ) {
             m.contributorsCount++;
         }
-        milestoneContributions[_campaignId][_milestoneId][msg.sender] += msg
-            .value;
-        m.raisedAmount += msg.value;
+        milestoneContributions[_campaignId][_milestoneId][
+            msg.sender
+        ] += acceptedAmount;
+        // CHANGED: was m.raisedAmount += msg.value;
+        m.raisedAmount += acceptedAmount;
 
-        emit MilestoneFunded(_campaignId, _milestoneId, msg.sender, msg.value);
+        // Refund excess (reentrancy guard is active)
+        if (refundAmount > 0) {
+            payable(msg.sender).transfer(refundAmount);
+        }
+
+        // CHANGED: was emit MilestoneFunded(..., msg.value);
+        emit MilestoneFunded(
+            _campaignId,
+            _milestoneId,
+            msg.sender,
+            acceptedAmount
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -544,7 +610,13 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
         }
 
         payable(msg.sender).transfer(contributed);
-        emit MilestoneRejected(_campaignId, _milestoneId, msg.sender); // reuse event for audit
+
+        // FIX (Issue #4): Was incorrectly emitting MilestoneRejected here, which pollutes
+        // the event log and will confuse any off-chain indexer treating Rejected as a status
+        // transition. The correct event to emit is MilestoneReleased (funds leaving contract)
+        // or a dedicated refund event. We reuse MilestoneReleased with contributor as context.
+        // Original incorrect line: emit MilestoneRejected(_campaignId, _milestoneId, msg.sender);
+        emit MilestoneReleased(_campaignId, _milestoneId, contributed);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -626,6 +698,20 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
         address _voter
     ) external view returns (Vote memory) {
         return votes[_campaignId][_milestoneId][_voter];
+    }
+
+    // FIX (Issue #5): This function is declared in constants/abi.js and called by
+    // useIsCampaignRegistered() in useContract.js and CampaignDetails.js, but it was
+    // completely absent from the contract. Every call would revert with "function not found",
+    // silently breaking the milestone setup UI for all campaigns.
+    /**
+     * @notice Returns true if a campaign has been registered for milestone management.
+     * @param _campaignId  Campaign ID to check.
+     */
+    function isCampaignRegistered(
+        uint256 _campaignId
+    ) external view returns (bool) {
+        return campaignCreator[_campaignId] != address(0);
     }
 
     /// @dev Returns all milestones for a campaign as an array

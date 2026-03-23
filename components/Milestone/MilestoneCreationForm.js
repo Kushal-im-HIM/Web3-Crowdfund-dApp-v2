@@ -6,7 +6,10 @@ import { useContract } from "../../hooks/useContract";
 
 const EMPTY_MS = { title: "", description: "", targetEth: "", durationDays: "" };
 
-export default function MilestoneCreationForm({ campaignId, onDone }) {
+// FIX (Issue #7): Added campaignTarget prop so that:
+//   (a) registerCampaign() can pass it to the updated contract signature, and
+//   (b) handleSaveAll() can validate that milestone totals don't exceed it.
+export default function MilestoneCreationForm({ campaignId, campaignTarget, onDone }) {
   const { useRegisterCampaignForMilestones, useCreateMilestone } = useContract();
   const { write: register, isLoading: registering } = useRegisterCampaignForMilestones();
   const { write: createMs, isLoading: creatingMs } = useCreateMilestone();
@@ -26,8 +29,17 @@ export default function MilestoneCreationForm({ campaignId, onDone }) {
     if (!campaignId && campaignId !== 0) {
       return toast.error("No campaign ID — please try again");
     }
+    // FIX (Issue #7): registerCampaign now requires a second argument: the campaign's
+    // target amount in wei. Without it the contract call would revert.
+    // Original: register({ args: [campaignId] });
+    const targetWei = campaignTarget
+      ? ethers.utils.parseEther(campaignTarget.toString())
+      : undefined;
+    if (!targetWei || targetWei.isZero()) {
+      return toast.error("Campaign target is missing — cannot enable milestones");
+    }
     register({
-      args: [campaignId],
+      args: [campaignId, targetWei],
     });
     // Optimistically move to add step — tx is async, contract will revert if it fails
     setTimeout(() => setStep("add"), 1000);
@@ -37,6 +49,20 @@ export default function MilestoneCreationForm({ campaignId, onDone }) {
     const valid = milestones.filter((m) => m.title.trim() && m.targetEth);
     if (valid.length === 0) {
       return toast.error("Add at least one milestone with a title and target amount");
+    }
+
+    // FIX (Issue #2/7): Validate that the cumulative milestone target does not exceed
+    // the campaign goal before submitting any transactions. Without this check, the
+    // contract revert would only surface after the first milestone that overflows,
+    // leaving earlier ones committed and the UI in an inconsistent state.
+    if (campaignTarget) {
+      const totalEth = valid.reduce((sum, m) => sum + parseFloat(m.targetEth || "0"), 0);
+      const targetEth = parseFloat(campaignTarget.toString());
+      if (totalEth > targetEth) {
+        return toast.error(
+          `Milestone totals (${totalEth.toFixed(4)} ETH) exceed campaign target (${targetEth.toFixed(4)} ETH)`
+        );
+      }
     }
 
     valid.forEach((m) => {
