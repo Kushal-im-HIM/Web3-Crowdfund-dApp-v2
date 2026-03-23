@@ -62,6 +62,10 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
     /// @dev Address of the trusted oracle signer
     address public oracleAddress;
 
+    // Issue 2 FIX: hard cap on number of milestones per campaign.
+    // Prevents creators from spamming milestones beyond a sensible limit.
+    uint256 public constant MAX_MILESTONES_PER_CAMPAIGN = 5;
+
     /// @dev campaignId  => milestoneId => Milestone
     mapping(uint256 => mapping(uint256 => Milestone)) public milestones;
 
@@ -285,6 +289,14 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
         require(_targetAmount > 0, "MilestoneManager: target must be > 0");
         require(_duration > 0, "MilestoneManager: duration must be > 0");
         require(bytes(_title).length > 0, "MilestoneManager: empty title");
+
+        // Issue 2 FIX: enforce hard cap on milestones per campaign at the contract level.
+        // Frontend enforces MAX_MILESTONES=5 too, but this ensures the invariant on-chain
+        // regardless of who calls the function.
+        require(
+            milestoneCount[_campaignId] < MAX_MILESTONES_PER_CAMPAIGN,
+            "MilestoneManager: max milestones reached"
+        );
 
         // FIX (Issue #2): Ensure cumulative milestone targets never exceed the campaign goal.
         // Previously there was no such check, allowing unlimited milestone creation.

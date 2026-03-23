@@ -13,19 +13,41 @@ export default function CampaignsPage() {
   const { useActiveCampaigns } = useContract();
   const { data: campaigns, isLoading } = useActiveCampaigns(0, 50);
 
-  const filteredCampaigns =
-    campaigns?.filter((campaign) => {
+  // Issue 1 FIX: Apply sort AFTER filter. Previously sortBy state existed but
+  // was never consumed — the array was rendered in raw contract order.
+  const filteredCampaigns = (campaigns || [])
+    .filter((campaign) => {
       const matchesSearch =
         campaign.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         campaign.description.toLowerCase().includes(searchTerm.toLowerCase());
-
       if (filterStatus === "all") return matchesSearch;
       if (filterStatus === "active") return matchesSearch && campaign.active;
-      if (filterStatus === "funded")
-        return matchesSearch && campaign.raisedAmount >= campaign.targetAmount;
-
+      if (filterStatus === "funded") return matchesSearch && campaign.raisedAmount >= campaign.targetAmount;
       return matchesSearch;
-    }) || [];
+    })
+    .slice() // never mutate the wagmi-cached reference
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "newest":  // highest createdAt first
+          return Number(b.createdAt) - Number(a.createdAt);
+        case "ending": { // smallest time-left first; expired campaigns sink to bottom
+          const now = Math.floor(Date.now() / 1000);
+          const aLeft = Number(a.deadline) - now;
+          const bLeft = Number(b.deadline) - now;
+          if (aLeft <= 0 && bLeft <= 0) return 0;
+          if (aLeft <= 0) return 1;
+          if (bLeft <= 0) return -1;
+          return aLeft - bLeft;
+        }
+        case "funded":  // highest raisedAmount first
+          return Number(b.raisedAmount) - Number(a.raisedAmount);
+        case "popular": // highest contributorsCount first
+          return Number(b.contributorsCount) - Number(a.contributorsCount);
+        default:
+          return 0;
+      }
+    });
+
 
   return (
     <Layout>
