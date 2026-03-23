@@ -194,7 +194,7 @@ export default function CreateCampaignForm() {
   };
 
   return (
-    <div className=" mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
+    <div className=" mx-auto bg-white dark:bg-primary-800 rounded-xl shadow-lg p-8">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
           Create New Campaign
@@ -208,14 +208,14 @@ export default function CreateCampaignForm() {
       {/* <ContractDebug /> */}
 
       {/* Creation Fee Notice */}
-      <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <div className="mb-6 p-4 bg-tertiary-50 dark:bg-tertiary-900/20 border border-tertiary-200 dark:border-tertiary-800 rounded-lg">
         <div className="flex items-start space-x-2">
-          <FiInfo className="w-5 h-5 text-blue-500 mt-0.5" />
+          <FiInfo className="w-5 h-5 text-tertiary-500 mt-0.5" />
           <div>
-            <h4 className="text-blue-800 dark:text-blue-200 font-medium">
+            <h4 className="text-tertiary-800 dark:text-tertiary-200 font-medium">
               Creation Fee
             </h4>
-            <p className="text-blue-700 dark:text-blue-300 text-sm">
+            <p className="text-tertiary-700 dark:text-tertiary-300 text-sm">
               A fee of {formatEther(CAMPAIGN_CREATION_FEE)} ETH is required to
               create a campaign.
             </p>
@@ -235,7 +235,7 @@ export default function CreateCampaignForm() {
             value={formData.title}
             onChange={handleInputChange}
             placeholder="Enter a compelling title for your campaign"
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 dark:bg-primary-700 dark:text-white"
             required
           />
         </div>
@@ -251,7 +251,7 @@ export default function CreateCampaignForm() {
             onChange={handleInputChange}
             rows={4}
             placeholder="Describe your campaign, goals, and how funds will be used"
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white resize-none"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 dark:bg-primary-700 dark:text-white resize-none"
             required
           />
         </div>
@@ -270,7 +270,7 @@ export default function CreateCampaignForm() {
               step="0.01"
               min="0.01"
               placeholder="0.00"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 dark:bg-primary-700 dark:text-white"
               required
             />
           </div>
@@ -287,7 +287,7 @@ export default function CreateCampaignForm() {
               min="1"
               max="365"
               placeholder="30"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 dark:bg-primary-700 dark:text-white"
               required
             />
           </div>
@@ -303,7 +303,7 @@ export default function CreateCampaignForm() {
               name="category"
               value={formData.category}
               onChange={handleInputChange}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 dark:bg-primary-700 dark:text-white"
             >
               {categories.map((category) => (
                 <option key={category} value={category}>
@@ -323,7 +323,7 @@ export default function CreateCampaignForm() {
               value={formData.tags}
               onChange={handleInputChange}
               placeholder="startup, tech, innovation (comma separated)"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 dark:bg-primary-700 dark:text-white"
             />
           </div>
         </div>
@@ -350,7 +350,7 @@ export default function CreateCampaignForm() {
               </button>
             </div>
           ) : (
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8">
+            <div className="border-2 border-dashed border-gray-300 dark:border-primary-600 rounded-lg p-8">
               <div className="text-center">
                 <FiUpload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600 dark:text-gray-400 mb-2">
@@ -381,7 +381,7 @@ export default function CreateCampaignForm() {
             onChange={handleInputChange}
             rows={3}
             placeholder="Any additional details about your campaign, team, or project timeline"
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white resize-none"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 dark:bg-primary-700 dark:text-white resize-none"
           />
         </div>
 
@@ -390,7 +390,7 @@ export default function CreateCampaignForm() {
           <button
             type="submit"
             disabled={isLoading || uploading}
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium py-4 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-emerald hover:shadow-emerald-glow disabled:from-gray-400 disabled:to-gray-500 text-white font-medium py-4 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
           >
             {uploading
               ? "Uploading to IPFS..."

@@ -37,10 +37,10 @@ export default function CampaignCard({ campaign, className = "" }) {
 
   return (
     <div
-      className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group ${className}`}
+      className={`bg-white dark:bg-primary-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group ${className}`}
     >
       {/* Image */}
-      <div className="relative h-48 bg-gradient-to-r from-blue-500 to-purple-600 overflow-hidden">
+      <div className="relative h-48 bg-gradient-emerald overflow-hidden">
         {metadata?.image ? (
           <img
             src={metadata.image}
@@ -60,11 +60,10 @@ export default function CampaignCard({ campaign, className = "" }) {
           <span
             className={`
             px-2 py-1 text-xs font-medium rounded-full
-            ${
-              campaign.active
-                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            ${campaign.active
+                ? "bg-secondary-100 text-secondary-800 dark:bg-secondary-900 dark:text-secondary-200"
                 : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-            }
+              }
           `}
           >
             {campaign.active ? "Active" : "Inactive"}
@@ -112,7 +111,7 @@ export default function CampaignCard({ campaign, className = "" }) {
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
+              className="bg-gradient-emerald h-2 rounded-full transition-all duration-300"
               style={{ width: `${Math.min(progress, 100)}%` }}
             />
           </div>
@@ -150,7 +149,7 @@ export default function CampaignCard({ campaign, className = "" }) {
 
         {/* Action Button */}
         <Link href={`/campaign/${campaign.id}`}>
-          <button className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-3 rounded-lg transition-all duration-200 transform hover:scale-105">
+          <button className="w-full bg-gradient-emerald hover:shadow-emerald-glow text-white font-medium py-3 rounded-lg transition-all duration-200 transform hover:scale-105">
             View Details
           </button>
         </Link>

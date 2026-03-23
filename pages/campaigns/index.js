@@ -44,21 +44,19 @@ export default function CampaignsPage() {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setViewMode("grid")}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === "grid"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-              }`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
+                ? "bg-blue-500 text-white"
+                : "bg-gray-200 dark:bg-primary-700 text-gray-600 dark:text-gray-400"
+                }`}
             >
               <FiGrid className="w-5 h-5" />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === "list"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-              }`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === "list"
+                ? "bg-blue-500 text-white"
+                : "bg-gray-200 dark:bg-primary-700 text-gray-600 dark:text-gray-400"
+                }`}
             >
               <FiList className="w-5 h-5" />
             </button>
@@ -66,7 +64,7 @@ export default function CampaignsPage() {
         </div>
 
         {/* Filters and Search */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
@@ -76,7 +74,7 @@ export default function CampaignsPage() {
                 placeholder="Search campaigns..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-primary-700 dark:text-white"
               />
             </div>
 
@@ -84,7 +82,7 @@ export default function CampaignsPage() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              className="px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-primary-700 dark:text-white"
             >
               <option value="all">All Campaigns</option>
               <option value="active">Active</option>
@@ -95,7 +93,7 @@ export default function CampaignsPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              className="px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-primary-700 dark:text-white"
             >
               <option value="newest">Newest First</option>
               <option value="ending">Ending Soon</option>
@@ -112,11 +110,11 @@ export default function CampaignsPage() {
               {[...Array(6)].map((_, i) => (
                 <div
                   key={i}
-                  className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 animate-pulse"
+                  className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse"
                 >
-                  <div className="h-48 bg-gray-200 dark:bg-gray-700 rounded-lg mb-4"></div>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                  <div className="h-48 bg-gray-200 dark:bg-primary-700 rounded-lg mb-4"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded w-3/4"></div>
                 </div>
               ))}
             </div>
@@ -137,7 +135,7 @@ export default function CampaignsPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl">
+            <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl">
               <FiSearch className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                 No campaigns found

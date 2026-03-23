@@ -11,7 +11,7 @@ export default function Layout({ children }) {
   const toggleSidebarCollapse = () => setSidebarCollapsed(!sidebarCollapsed);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-primary-50 dark:bg-primary-900">
       <Sidebar
         isOpen={sidebarOpen}
         onToggle={toggleSidebar}

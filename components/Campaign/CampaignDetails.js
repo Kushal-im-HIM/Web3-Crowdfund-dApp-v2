@@ -65,7 +65,7 @@ export default function CampaignDetails({ campaignId }) {
   if (campaignLoading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500" />
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-secondary-500" />
       </div>
     );
   }
@@ -75,7 +75,7 @@ export default function CampaignDetails({ campaignId }) {
       <div className="text-center py-12">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Campaign Not Found</h2>
         <p className="text-gray-600 dark:text-gray-400 mb-6">The campaign you're looking for doesn't exist or has been removed.</p>
-        <button onClick={() => router.push("/campaigns")} className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+        <button onClick={() => router.push("/campaigns")} className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-2 rounded-lg transition-all">
           Browse Campaigns
         </button>
       </div>
@@ -129,21 +129,21 @@ export default function CampaignDetails({ campaignId }) {
     <div className="max-w-6xl mx-auto space-y-6 pb-16">
 
       {/* ── Campaign Hero Card ─────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-primary-700">
 
         {/* Image */}
-        <div className="relative h-64 md:h-80 bg-gradient-to-r from-blue-500 to-purple-600">
+        <div className="relative h-64 md:h-80 bg-gradient-emerald">
           {metadata?.image
             ? <img src={metadata.image} alt={campaign.title} className="w-full h-full object-cover" />
             : <div className="w-full h-full flex items-center justify-center text-white text-8xl font-bold opacity-20">{campaign.title?.charAt(0) || "C"}</div>
           }
           <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
             <div className="flex gap-2">
-              <span className={`px-3 py-1 text-xs font-bold rounded-full backdrop-blur-sm ${campaign.active ? "bg-green-500/80 text-white" : "bg-red-500/80 text-white"}`}>
+              <span className={`px-3 py-1 text-xs font-bold rounded-full backdrop-blur-sm ${campaign.active ? "bg-secondary-500/80 text-white" : "bg-red-500/80 text-white"}`}>
                 {campaign.active ? "ACTIVE" : "INACTIVE"}
               </span>
               {isSuccessful && (
-                <span className="px-3 py-1 text-xs font-bold bg-yellow-500/80 text-white rounded-full backdrop-blur-sm">FUNDED</span>
+                <span className="px-3 py-1 text-xs font-bold bg-accent-500/80 text-white rounded-full backdrop-blur-sm">FUNDED</span>
               )}
             </div>
             <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/30 transition-all">
@@ -163,15 +163,15 @@ export default function CampaignDetails({ campaignId }) {
                 <p className="text-gray-600 dark:text-gray-400 text-base leading-relaxed">{campaign.description}</p>
               </div>
 
-              <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/60 rounded-lg border border-gray-200 dark:border-gray-600">
-                <div className="w-10 h-10 bg-blue-500/20 dark:bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/30">
-                  <FiUser className="w-5 h-5 text-blue-500" />
+              <div className="flex items-center gap-4 p-4 bg-primary-50 dark:bg-primary-700/60 rounded-lg border border-gray-200 dark:border-primary-600">
+                <div className="w-10 h-10 bg-secondary-500/20 dark:bg-secondary-500/10 rounded-full flex items-center justify-center border border-secondary-500/30">
+                  <FiUser className="w-5 h-5 text-secondary-600 dark:text-secondary-400" />
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold tracking-wide">Project Creator</p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white font-mono">
-                    {formatAddress(campaign.creator)}
-                    {isCreator && <span className="ml-2 text-blue-500 font-sans">(You)</span>}
+                    {campaign.creator}
+                    {isCreator && <span className="ml-2 text-secondary-600 dark:text-secondary-400 font-sans">(You)</span>}
                   </p>
                 </div>
               </div>
@@ -179,7 +179,7 @@ export default function CampaignDetails({ campaignId }) {
 
             {/* Right — Stats & Actions */}
             <div className="lg:w-80 mt-6 lg:mt-0">
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600 space-y-5">
+              <div className="bg-primary-50 dark:bg-primary-700/50 rounded-xl p-6 border border-gray-200 dark:border-primary-600 space-y-5">
 
                 {/* Progress bar */}
                 <div>
@@ -188,7 +188,7 @@ export default function CampaignDetails({ campaignId }) {
                     <span className="font-bold text-gray-900 dark:text-white">{progress.toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
-                    <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2.5 rounded-full transition-all duration-500"
+                    <div className="bg-gradient-emerald h-2.5 rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(progress, 100)}%` }} />
                   </div>
                 </div>
@@ -201,7 +201,7 @@ export default function CampaignDetails({ campaignId }) {
                     { val: uniqueContributors.length, label: "Backers" },
                     { val: timeLeft.expired ? "Ended" : timeLeft.text?.split(" ")[0] ?? "—", label: timeLeft.expired ? "" : "Days Left" },
                   ].map(({ val, label }, i) => (
-                    <div key={i} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600 text-center">
+                    <div key={i} className="bg-white dark:bg-primary-800 rounded-lg p-3 border border-gray-200 dark:border-primary-600 text-center">
                       <p className="text-xl font-bold text-gray-900 dark:text-white">{val}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
                     </div>
@@ -213,9 +213,9 @@ export default function CampaignDetails({ campaignId }) {
                   <div className="space-y-2">
                     <input type="number" step="0.01" min="0.01" placeholder="0.00 ETH"
                       value={contributionAmount} onChange={(e) => setContributionAmount(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg text-sm bg-white dark:bg-primary-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-secondary-500 outline-none" />
                     <button onClick={handleContribute} disabled={contributing || !contributionAmount}
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-semibold py-3 rounded-lg transition-all disabled:cursor-not-allowed">
+                      className="w-full bg-gradient-emerald hover:shadow-emerald-glow disabled:from-gray-400 disabled:to-gray-400 text-white font-semibold py-3 rounded-lg transition-all disabled:cursor-not-allowed">
                       {contributing ? "Processing..." : "Contribute Now"}
                     </button>
                   </div>
@@ -223,27 +223,27 @@ export default function CampaignDetails({ campaignId }) {
 
                 {canWithdraw && (
                   <button onClick={() => withdrawFunds?.({ args: [campaignId] })} disabled={withdrawing}
-                    className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors disabled:cursor-not-allowed">
+                    className="w-full bg-secondary-500 hover:bg-secondary-600 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors disabled:cursor-not-allowed">
                     {withdrawing ? "Withdrawing..." : "Withdraw Funds"}
                   </button>
                 )}
 
                 {canGetRefund && (
                   <button onClick={() => getRefund?.({ args: [campaignId] })} disabled={refunding}
-                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors disabled:cursor-not-allowed">
+                    className="w-full bg-accent-500 hover:bg-accent-600 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors disabled:cursor-not-allowed">
                     {refunding ? "Processing..." : "Get Refund"}
                   </button>
                 )}
 
                 {!isConnected && (
-                  <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                    <p className="text-yellow-800 dark:text-yellow-300 text-sm">Connect wallet to contribute</p>
+                  <div className="text-center p-3 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800 rounded-lg">
+                    <p className="text-accent-800 dark:text-accent-300 text-sm">Connect wallet to contribute</p>
                   </div>
                 )}
 
                 {userContribution > 0 && (
-                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <div className="p-3 bg-secondary-50 dark:bg-secondary-900/20 border border-secondary-200 dark:border-secondary-800 rounded-lg">
+                    <p className="text-sm text-secondary-800 dark:text-secondary-300">
                       Your contribution: <span className="font-bold">{formatEther(userContribution)} ETH</span>
                     </p>
                   </div>
@@ -255,10 +255,10 @@ export default function CampaignDetails({ campaignId }) {
       </div>
 
       {/* ── Milestones Section ─────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 md:p-8">
+      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-gray-200 dark:border-primary-700 p-6 md:p-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <FiFlag className="w-5 h-5 text-indigo-500" />
+            <FiFlag className="w-5 h-5 text-tertiary-500" />
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Project Milestones</h2>
           </div>
 
@@ -266,7 +266,7 @@ export default function CampaignDetails({ campaignId }) {
           {isCreator && !isMilestoneRegistered && !showMilestoneSetup && (
             <button
               onClick={() => setShowMilestoneSetup(true)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-2 bg-tertiary-600 hover:bg-tertiary-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
             >
               <FiPlusCircle className="w-4 h-4" />
               Set Up Milestones
@@ -299,18 +299,18 @@ export default function CampaignDetails({ campaignId }) {
       </div>
 
       {/* ── Tabs Section ──────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 md:p-8">
-        <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-gray-200 dark:border-primary-700 p-6 md:p-8">
+        <div className="border-b border-gray-200 dark:border-primary-700 mb-6">
           <nav className="flex gap-8">
             {["overview", "contributors"].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`pb-3 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${activeTab === tab
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  ? "border-secondary-500 text-secondary-600 dark:text-secondary-400"
                   : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                   }`}>
                 {tab}
                 {tab === "contributors" && uniqueContributors.length > 0 && (
-                  <span className="ml-1.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold px-2 py-0.5 rounded-full">
+                  <span className="ml-1.5 bg-secondary-100 dark:bg-secondary-900/50 text-secondary-700 dark:text-secondary-300 text-xs font-bold px-2 py-0.5 rounded-full">
                     {uniqueContributors.length}
                   </span>
                 )}
@@ -323,7 +323,7 @@ export default function CampaignDetails({ campaignId }) {
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Campaign Stats</h3>
+              <h3 className="text-xs font-bold text-tertiary-600 dark:text-tertiary-400 uppercase tracking-widest">Campaign Stats</h3>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-3">
                   <FiCalendar className="w-4 h-4 text-gray-400 shrink-0" />
@@ -347,7 +347,7 @@ export default function CampaignDetails({ campaignId }) {
                     <span className="text-gray-500 dark:text-gray-400 w-20 shrink-0 mt-0.5">Tags:</span>
                     <div className="flex flex-wrap gap-1.5">
                       {metadata.tags.map((tag, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                        <span key={i} className="px-2 py-0.5 bg-secondary-100 dark:bg-secondary-900/50 text-secondary-700 dark:text-secondary-300 text-xs rounded-full">
                           {tag}
                         </span>
                       ))}
