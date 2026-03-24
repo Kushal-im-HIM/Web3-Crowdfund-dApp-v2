@@ -99,12 +99,17 @@ export const useContract = () => {
   const useCampaignMilestones = (campaignId) => useContractRead({ address: MILESTONE_MANAGER_ADDRESS, abi: MILESTONE_MANAGER_ABI, functionName: "getCampaignMilestones", args: [campaignId], enabled: !!campaignId, watch: true });
 
   const makeMilestoneWrite = (functionName, msg) => {
-    const { write, writeAsync, isLoading, isSuccess, error } = useContractWrite({
+    // FIX: destructure `data` from useContractWrite — it holds { hash } after MetaMask
+    // confirms. Previously `data` was silently dropped from the return value, so any
+    // caller using useWaitForTransaction({ hash: data?.hash }) would receive undefined
+    // and wait forever. This is why the "Confirming on-chain…" screen never advanced.
+    const { write, writeAsync, isLoading, isSuccess, error, data } = useContractWrite({
       address: MILESTONE_MANAGER_ADDRESS, abi: MILESTONE_MANAGER_ABI, functionName,
       onSuccess: () => toast.success(msg),
       onError: (err) => toast.error(err?.message || "Action failed"),
     });
-    return { write, writeAsync, isLoading, isSuccess, error };
+    // Original: return { write, writeAsync, isLoading, isSuccess, error };
+    return { write, writeAsync, isLoading, isSuccess, error, data };
   };
 
   const useRegisterCampaignForMilestones = () => makeMilestoneWrite("registerCampaign", "Milestone system active!");
