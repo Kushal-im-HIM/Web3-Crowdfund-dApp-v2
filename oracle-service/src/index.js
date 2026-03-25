@@ -153,5 +153,17 @@ main().catch((err) => {
   process.exit(1);
 });
 
+// ─── Dummy Web Server for Render Free Tier ───────────────────────────────────
+const http = require('http');
+const port = process.env.PORT || 10000;
+
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.write('Oracle is alive and listening to Sepolia!\n');
+  res.end();
+}).listen(port, () => {
+  console.log(`[oracle] Dummy web server listening on port ${port} to satisfy Render.`);
+});
+
 // Export for testing
 module.exports = { handleMilestoneSubmitted };
