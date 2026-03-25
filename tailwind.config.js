@@ -10,6 +10,124 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // ═══════════════════════════════════════════════════════════
+        // NEW COLOR PALETTE: "Slate Emerald Harmony" 
+        // Professional, Modern, Trustworthy - Updated for Web3 Innovation Platform
+        // ═══════════════════════════════════════════════════════════
+
+        // PRIMARY: Slate Gray (Professional, Grounded, Serious)
+        primary: {
+          50: "#f8fafc",
+          100: "#f1f5f9",
+          200: "#e2e8f0",
+          300: "#cbd5e1",
+          400: "#94a3b8",
+          500: "#64748b",  // Main brand color
+          600: "#475569",
+          700: "#334155",
+          800: "#1e293b",
+          900: "#0f172a",
+        },
+
+        // SECONDARY: Emerald Green (Innovation, Growth, Success)
+        secondary: {
+          50: "#ecfdf5",
+          100: "#d1fae5",
+          200: "#a7f3d0",
+          300: "#6ee7b7",
+          400: "#34d399",
+          500: "#10b981",  // Success/Funded color
+          600: "#059669",
+          700: "#047857",
+          800: "#065f46",
+          900: "#064e3b",
+        },
+
+        // ACCENT: Amber Orange (Action, Energy, Warmth)
+        accent: {
+          50: "#fffbeb",
+          100: "#fef3c7",
+          200: "#fde68a",
+          300: "#fcd34d",
+          400: "#fbbf24",
+          500: "#f59e0b",  // Call-to-action color
+          600: "#d97706",
+          700: "#b45309",
+          800: "#92400e",
+          900: "#78350f",
+        },
+
+        // TERTIARY: Cool Cyan (Web3, Digital, Modern)
+        tertiary: {
+          50: "#ecfeff",
+          100: "#cffafe",
+          200: "#a5f3fc",
+          300: "#67e8f9",
+          400: "#22d3ee",
+          500: "#06b6d4",  // Informational badges
+          600: "#0891b2",
+          700: "#0e7490",
+          800: "#155e75",
+          900: "#164e63",
+        },
+
+        // SEMANTIC COLORS
+        success: {
+          50: "#ecfdf5",
+          100: "#d1fae5",
+          200: "#a7f3d0",
+          300: "#6ee7b7",
+          400: "#34d399",
+          500: "#10b981",  // Match emerald
+          600: "#059669",
+          700: "#047857",
+          800: "#065f46",
+          900: "#064e3b",
+        },
+        warning: {
+          50: "#fffbeb",
+          100: "#fef3c7",
+          200: "#fde68a",
+          300: "#fcd34d",
+          400: "#fbbf24",
+          500: "#f59e0b",  // Match amber
+          600: "#d97706",
+          700: "#b45309",
+          800: "#92400e",
+          900: "#78350f",
+        },
+        error: {
+          50: "#fef2f2",
+          100: "#fee2e2",
+          200: "#fecaca",
+          300: "#fca5a5",
+          400: "#f87171",
+          500: "#ef4444",
+          600: "#dc2626",
+          700: "#b91c1c",
+          800: "#991b1b",
+          900: "#7f1d1d",
+        },
+
+        // NEUTRALS: Warm Grays (Soft, Readable)
+        gray: {
+          50: "#fafafa",
+          100: "#f5f5f5",
+          200: "#e5e5e5",
+          300: "#d4d4d4",
+          400: "#a3a3a3",
+          500: "#737373",
+          600: "#525252",
+          700: "#404040",
+          800: "#262626",
+          900: "#171717",
+        },
+
+        // ═══════════════════════════════════════════════════════════
+        // OLD COLOR PALETTE (COMMENTED OUT FOR REFERENCE)
+        // Uncomment these if you need to revert to the original blue/purple scheme
+        // ═══════════════════════════════════════════════════════════
+        /*
         primary: {
           50: "#eff6ff",
           100: "#dbeafe",
@@ -34,54 +152,7 @@ module.exports = {
           800: "#6b21a8",
           900: "#581c87",
         },
-        success: {
-          50: "#ecfdf5",
-          100: "#d1fae5",
-          200: "#a7f3d0",
-          300: "#6ee7b7",
-          400: "#34d399",
-          500: "#10b981",
-          600: "#059669",
-          700: "#047857",
-          800: "#065f46",
-          900: "#064e3b",
-        },
-        warning: {
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24",
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
-          800: "#92400e",
-          900: "#78350f",
-        },
-        error: {
-          50: "#fef2f2",
-          100: "#fee2e2",
-          200: "#fecaca",
-          300: "#fca5a5",
-          400: "#f87171",
-          500: "#ef4444",
-          600: "#dc2626",
-          700: "#b91c1c",
-          800: "#991b1b",
-          900: "#7f1d1d",
-        },
-        gray: {
-          50: "#f9fafb",
-          100: "#f3f4f6",
-          200: "#e5e7eb",
-          300: "#d1d5db",
-          400: "#9ca3af",
-          500: "#6b7280",
-          600: "#4b5563",
-          700: "#374151",
-          800: "#1f2937",
-          900: "#111827",
-        },
+        */
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui"],
@@ -102,6 +173,17 @@ module.exports = {
           "0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
         large: "0 10px 50px -12px rgba(0, 0, 0, 0.25)",
         "inner-lg": "inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)",
+        // New shadows for updated design
+        "emerald-glow": "0 8px 24px rgba(16, 185, 129, 0.12)",
+        "slate-soft": "0 2px 8px rgba(0, 0, 0, 0.04)",
+        "amber-glow": "0 4px 14px rgba(245, 158, 11, 0.2)",
+      },
+      backgroundImage: {
+        // Gradient utilities for hero sections
+        'gradient-slate-emerald': 'linear-gradient(135deg, #f8fafc 0%, #ecfdf5 50%, #fffbeb 100%)',
+        'gradient-slate-emerald-dark': 'linear-gradient(135deg, #0f172a 0%, #064e3b 100%)',
+        'gradient-emerald': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+        'gradient-amber': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",

@@ -1,49 +1,97 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# =============================================================================
+# CROWDFUND PRO — .gitignore
+# Covers: Next.js frontend + Hardhat contracts + Oracle service + Indexer
+# =============================================================================
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
 
-# testing
-/coverage
+# =============================================================================
+# !! SECRETS — NEVER COMMIT THESE !!
+# =============================================================================
+.env
+.env.*
+web3/.env
+oracle-service/.env
+indexer/.env
+.env
+.env.local
+web3/.env
 
-# next.js
-/.next/
-/out/
 
-# production
-/build
+# =============================================================================
+# NODE MODULES — all layers
+# =============================================================================
+node_modules/
+web3/node_modules/
+oracle-service/node_modules/
+indexer/node_modules/
 
-# misc
+
+# =============================================================================
+# HARDHAT BUILD ARTIFACTS — fully regenerated on every compile + deploy
+# Never commit these; they contain absolute machine paths inside .dbg.json
+# and build-info/ hashes change on every compilation even with no code changes.
+# =============================================================================
+web3/artifacts/
+web3/cache/
+web3/typechain/
+web3/typechain-types/
+
+
+# =============================================================================
+# NEXT.JS BUILD OUTPUT
+# =============================================================================
+.next/
+out/
+build/
+
+
+# =============================================================================
+# TEST COVERAGE OUTPUT
+# =============================================================================
+coverage/
+coverage.json
+lcov.info
+
+
+# =============================================================================
+# LOCK FILES — keep root package-lock.json for reproducible frontend deploys.
+# Ignore sub-project lock files (Hardhat + oracle run locally).
+# =============================================================================
+web3/package-lock.json
+oracle-service/package-lock.json
+
+
+# =============================================================================
+# OS / EDITOR JUNK
+# =============================================================================
 .DS_Store
+Thumbs.db
 *.pem
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+*~
 
-# debug
+
+# =============================================================================
+# LOGS
+# =============================================================================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
-# local env files
 
-
-# vercel
+# =============================================================================
+# VERCEL / DEPLOYMENT
+# =============================================================================
 .vercel
 
-node_modules
 
-coverage
-coverage.json
-typechain
-typechain-types
-
-# Hardhat files
-cache
-
-# Environment files
-.env
-.env.*
-
-
-
+# =============================================================================
+# MISC
+# =============================================================================
+.pnp
+.pnp.js

@@ -217,7 +217,7 @@ export default function MyCampaignsPage() {
 
           <button
             onClick={() => router.push("/create-campaign")}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 inline-flex items-center"
+            className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 inline-flex items-center"
           >
             <FiPlus className="w-5 h-5 mr-2" />
             Create Campaign
@@ -226,7 +226,7 @@ export default function MyCampaignsPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -236,13 +236,13 @@ export default function MyCampaignsPage() {
                   {campaigns.length}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                <FiTarget className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div className="w-12 h-12 bg-secondary-50 dark:bg-secondary-900/20 rounded-lg flex items-center justify-center">
+                <FiTarget className="w-6 h-6 text-secondary-600 dark:text-secondary-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -252,13 +252,13 @@ export default function MyCampaignsPage() {
                   {totalRaised.toFixed(2)} ETH
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                <FiTrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
+              <div className="w-12 h-12 bg-tertiary-50 dark:bg-tertiary-900/20 rounded-lg flex items-center justify-center">
+                <FiTrendingUp className="w-6 h-6 text-tertiary-600 dark:text-tertiary-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -268,13 +268,13 @@ export default function MyCampaignsPage() {
                   {activeCampaigns}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
-                <FiUsers className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <div className="w-12 h-12 bg-accent-50 dark:bg-accent-900/20 rounded-lg flex items-center justify-center">
+                <FiUsers className="w-6 h-6 text-accent-600 dark:text-accent-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -284,8 +284,8 @@ export default function MyCampaignsPage() {
                   {successfulCampaigns}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center">
-                <FiTarget className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+              <div className="w-12 h-12 bg-secondary-50 dark:bg-secondary-900/20 rounded-lg flex items-center justify-center">
+                <FiTarget className="w-6 h-6 text-secondary-600 dark:text-secondary-400" />
               </div>
             </div>
           </div>
@@ -297,11 +297,11 @@ export default function MyCampaignsPage() {
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 animate-pulse"
+                className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse"
               >
-                <div className="h-48 bg-gray-200 dark:bg-gray-700 rounded-lg mb-4"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                <div className="h-48 bg-gray-200 dark:bg-primary-700 rounded-lg mb-4"></div>
+                <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded mb-2"></div>
+                <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded w-3/4"></div>
               </div>
             ))}
           </div>
@@ -314,7 +314,7 @@ export default function MyCampaignsPage() {
             </div>
           </div>
         ) : (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl">
+          <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-gray-300 dark:border-primary-700">
             <FiTarget className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
               No campaigns yet
@@ -324,7 +324,7 @@ export default function MyCampaignsPage() {
             </p>
             <button
               onClick={() => router.push("/create-campaign")}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center"
+              className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 inline-flex items-center"
             >
               <FiPlus className="w-5 h-5 mr-2" />
               Create Your First Campaign

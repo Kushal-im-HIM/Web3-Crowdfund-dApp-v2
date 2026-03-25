@@ -237,9 +237,8 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center space-x-2">
             <div
-              className={`w-3 h-3 rounded-full ${
-                isPaused ? "bg-red-500" : "bg-green-500"
-              }`}
+              className={`w-3 h-3 rounded-full ${isPaused ? "bg-red-500" : "bg-emerald-500"
+                }`}
             ></div>
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               {isPaused ? "Paused" : "Active"}
@@ -249,7 +248,7 @@ export default function AdminPage() {
 
         {/* Platform Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -259,13 +258,13 @@ export default function AdminPage() {
                   {totalCampaigns}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                <FiActivity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <div className="w-12 h-12 bg-secondary-50 dark:bg-secondary-900/20 rounded-lg flex items-center justify-center">
+                <FiActivity className="w-6 h-6 text-secondary-600 dark:text-secondary-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -275,13 +274,13 @@ export default function AdminPage() {
                   {availableFees} ETH
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                <FiDollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
+              <div className="w-12 h-12 bg-tertiary-50 dark:bg-tertiary-900/20 rounded-lg flex items-center justify-center">
+                <FiDollarSign className="w-6 h-6 text-tertiary-600 dark:text-tertiary-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -291,39 +290,37 @@ export default function AdminPage() {
                   {contractBalance} ETH
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
-                <FiShield className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <div className="w-12 h-12 bg-accent-50 dark:bg-accent-900/20 rounded-lg flex items-center justify-center">
+                <FiShield className="w-6 h-6 text-accent-600 dark:text-accent-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
                   Platform Status
                 </p>
                 <p
-                  className={`text-2xl font-bold ${
-                    isPaused
+                  className={`text-2xl font-bold ${isPaused
                       ? "text-red-600 dark:text-red-400"
-                      : "text-green-600 dark:text-green-400"
-                  }`}
+                      : "text-emerald-600 dark:text-emerald-400"
+                    }`}
                 >
                   {isPaused ? "Paused" : "Active"}
                 </p>
               </div>
               <div
-                className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  isPaused
-                    ? "bg-red-100 dark:bg-red-900"
-                    : "bg-green-100 dark:bg-green-900"
-                }`}
+                className={`w-12 h-12 rounded-lg flex items-center justify-center ${isPaused
+                    ? "bg-red-50 dark:bg-red-900/20"
+                    : "bg-emerald-50 dark:bg-emerald-900/20"
+                  }`}
               >
                 {isPaused ? (
                   <FiPause className="w-6 h-6 text-red-600 dark:text-red-400" />
                 ) : (
-                  <FiPlay className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  <FiPlay className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 )}
               </div>
             </div>
@@ -333,7 +330,7 @@ export default function AdminPage() {
         {/* Admin Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Fee Management */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Fee Management
             </h3>
@@ -350,16 +347,16 @@ export default function AdminPage() {
                   placeholder="0.00"
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 dark:bg-primary-700 dark:text-white outline-none"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Available: {availableFees} ETH
                 </p>
               </div>
               <button
                 onClick={handleWithdrawFees}
                 disabled={isWithdrawing || !withdrawAmount}
-                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-medium py-3 rounded-lg transition-colors"
+                className="w-full bg-gradient-emerald hover:shadow-emerald-glow disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none text-white font-medium py-3 rounded-lg transition-all duration-300 disabled:cursor-not-allowed"
               >
                 {isWithdrawing ? "Withdrawing..." : "Withdraw Fees"}
               </button>
@@ -367,7 +364,7 @@ export default function AdminPage() {
           </div>
 
           {/* Platform Controls */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Platform Controls
             </h3>
@@ -375,11 +372,10 @@ export default function AdminPage() {
               <button
                 onClick={handlePauseContract}
                 disabled={isPausing || isUnpausing}
-                className={`w-full font-medium py-3 rounded-lg transition-colors inline-flex items-center justify-center ${
-                  isPaused
-                    ? "bg-green-500 hover:bg-green-600 text-white"
-                    : "bg-yellow-500 hover:bg-yellow-600 text-white"
-                }`}
+                className={`w-full font-medium py-3 rounded-lg transition-all duration-300 inline-flex items-center justify-center disabled:cursor-not-allowed disabled:bg-gray-400 disabled:text-white ${isPaused
+                    ? "bg-gradient-emerald hover:shadow-emerald-glow text-white"
+                    : "bg-orange-500 hover:bg-orange-600 text-white"
+                  }`}
               >
                 {isPausing || isUnpausing ? (
                   "Processing..."
@@ -399,7 +395,7 @@ export default function AdminPage() {
               <button
                 onClick={handleEmergencyWithdraw}
                 disabled={isEmergencyWithdrawing}
-                className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white font-medium py-3 rounded-lg transition-colors inline-flex items-center justify-center"
+                className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white font-medium py-3 rounded-lg transition-colors inline-flex items-center justify-center disabled:cursor-not-allowed"
               >
                 <FiAlertTriangle className="w-5 h-5 mr-2" />
                 {isEmergencyWithdrawing
@@ -410,7 +406,7 @@ export default function AdminPage() {
           </div>
 
           {/* Campaign Management */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Campaign Management
             </h3>
@@ -425,13 +421,13 @@ export default function AdminPage() {
                   placeholder="Enter campaign ID"
                   value={campaignToToggle}
                   onChange={(e) => setCampaignToToggle(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 dark:bg-primary-700 dark:text-white outline-none"
                 />
               </div>
               <button
                 onClick={handleToggleCampaign}
                 disabled={isDeactivating || isReactivating || !campaignToToggle}
-                className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white font-medium py-3 rounded-lg transition-colors"
+                className="w-full bg-secondary-500 hover:bg-secondary-600 disabled:bg-gray-400 text-white font-medium py-3 rounded-lg transition-colors disabled:cursor-not-allowed"
               >
                 {isDeactivating || isReactivating
                   ? "Processing..."
@@ -442,7 +438,7 @@ export default function AdminPage() {
         </div>
 
         {/* Contract Information */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Contract Information
           </h3>
@@ -451,7 +447,7 @@ export default function AdminPage() {
               <span className="text-gray-600 dark:text-gray-400">
                 Contract Address:
               </span>
-              <div className="font-mono text-gray-900 dark:text-white break-all">
+              <div className="font-mono text-gray-900 dark:text-white break-all mt-1">
                 {CONTRACT_ADDRESS}
               </div>
             </div>
@@ -459,7 +455,7 @@ export default function AdminPage() {
               <span className="text-gray-600 dark:text-gray-400">
                 Owner Address:
               </span>
-              <div className="font-mono text-gray-900 dark:text-white break-all">
+              <div className="font-mono text-gray-900 dark:text-white break-all mt-1">
                 {contractOwner || "Loading..."}
               </div>
             </div>
@@ -467,14 +463,13 @@ export default function AdminPage() {
               <span className="text-gray-600 dark:text-gray-400">
                 Creation Fee:
               </span>
-              <div className="text-gray-900 dark:text-white">1.0 ETH</div>
+              <div className="text-gray-900 dark:text-white mt-1">1.0 ETH</div>
             </div>
             <div>
               <span className="text-gray-600 dark:text-gray-400">Status:</span>
               <div
-                className={`font-medium ${
-                  isPaused ? "text-red-600" : "text-green-600"
-                }`}
+                className={`font-medium mt-1 ${isPaused ? "text-red-500" : "text-emerald-500"
+                  }`}
               >
                 {isPaused ? "Contract Paused" : "Contract Active"}
               </div>
@@ -483,17 +478,16 @@ export default function AdminPage() {
         </div>
 
         {/* Recent Activities - Static for now */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             System Status
           </h3>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-primary-900/50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <div
-                  className={`w-2 h-2 rounded-full ${
-                    isPaused ? "bg-red-500" : "bg-green-500"
-                  }`}
+                  className={`w-2 h-2 rounded-full ${isPaused ? "bg-red-500" : "bg-emerald-500"
+                    }`}
                 ></div>
                 <span className="text-gray-900 dark:text-white">
                   Contract {isPaused ? "paused" : "operational"}
@@ -503,9 +497,9 @@ export default function AdminPage() {
                 Current status
               </span>
             </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-primary-900/50 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-secondary-500 rounded-full"></div>
                 <span className="text-gray-900 dark:text-white">
                   {totalCampaigns} total campaigns
                 </span>
@@ -514,9 +508,9 @@ export default function AdminPage() {
                 All time
               </span>
             </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-primary-900/50 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-tertiary-500 rounded-full"></div>
                 <span className="text-gray-900 dark:text-white">
                   {availableFees} ETH in platform fees
                 </span>
