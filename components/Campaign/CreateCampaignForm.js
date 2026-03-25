@@ -132,7 +132,8 @@ export default function CreateCampaignForm() {
       // Prepare contract parameters
       const targetAmountWei = ethers.utils.parseEther(formData.targetAmount);
       const durationSeconds = parseInt(formData.duration) * 24 * 60 * 60; // Convert days to seconds
-      const creationFee = ethers.utils.parseEther("1"); // 1 ETH
+      // We use ethers.BigNumber.from() because the contract expects a BigNumber format, not a plain string.
+      const creationFee = ethers.BigNumber.from(CAMPAIGN_CREATION_FEE);
 
       console.log("Contract call parameters:", {
         title: formData.title,
@@ -395,8 +396,8 @@ export default function CreateCampaignForm() {
             {uploading
               ? "Uploading to IPFS..."
               : isLoading
-              ? "Creating Campaign..."
-              : "Create Campaign"}
+                ? "Creating Campaign..."
+                : "Create Campaign"}
           </button>
         </div>
       </form>

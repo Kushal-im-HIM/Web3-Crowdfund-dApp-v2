@@ -135,14 +135,33 @@ function onMilestoneVoted(campaignId, milestoneId, voter, inFavour, weight) {
 }
 
 // ─── Subscribe ───────────────────────────────────────────────────────────────
+// ─── Subscribe ───────────────────────────────────────────────────────────────
 async function startIndexer(contract) {
   console.log("[idx] Catching up historical events...");
-  const startBlock = parseInt(process.env.START_BLOCK || "0", 10);
+  let startBlock = parseInt(process.env.START_BLOCK || "0", 10);
   const current = await contract.provider.getBlockNumber();
 
+  // Safety net: don't start from block 0 on Sepolia
+  if (!startBlock || startBlock === 0) {
+    startBlock = current - 5;
+  }
+
+  // Updated catchUp function to use 10-block chunks for Alchemy Free Tier
   const catchUp = async (eventName, handler) => {
-    const events = await contract.queryFilter(contract.filters[eventName](), startBlock, current);
-    for (const ev of events) handler(...ev.args, ev);
+    console.log(`[idx] Catching up ${eventName}...`);
+    const CHUNK_SIZE = 10;
+
+    for (let fromBlock = startBlock; fromBlock <= current; fromBlock += CHUNK_SIZE) {
+      let toBlock = fromBlock + CHUNK_SIZE - 1;
+      if (toBlock > current) toBlock = current;
+
+      try {
+        const events = await contract.queryFilter(contract.filters[eventName](), fromBlock, toBlock);
+        for (const ev of events) handler(...ev.args, ev);
+      } catch (error) {
+        console.error(`[idx] API Error fetching ${eventName} blocks ${fromBlock}-${toBlock}:`, error.message);
+      }
+    }
   };
 
   await catchUp("CampaignRegistered", onCampaignRegistered);
@@ -203,7 +222,8 @@ function buildApi() {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 async function main() {
-  const { RPC_URL, MILESTONE_MANAGER_ADDRESS, INDEXER_PORT = "4000" } = process.env;
+  const { RPC_URL, MILESTONE_MANAGER_ADDRESS, PORT = "4000" } = process.env;
+  const portToUse = PORT;
   if (!RPC_URL || !MILESTONE_MANAGER_ADDRESS) {
     console.error("Set RPC_URL and MILESTONE_MANAGER_ADDRESS in .env");
     process.exit(1);
@@ -215,8 +235,8 @@ async function main() {
   await startIndexer(contract);
 
   const app = buildApi();
-  app.listen(parseInt(INDEXER_PORT, 10), () => {
-    console.log(`[idx] API listening on http://localhost:${INDEXER_PORT}`);
+  app.listen(parseInt(portToUse, 10), () => {
+    console.log(`[idx] API listening on http://localhost:${portToUse}`);
     console.log(`[idx] Endpoints:
   GET /campaigns
   GET /campaigns/:id/milestones

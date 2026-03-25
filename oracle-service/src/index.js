@@ -31,7 +31,7 @@ if (!RPC_URL || !ORACLE_PRIVATE_KEY || !MILESTONE_MANAGER_ADDRESS) {
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
-const wallet   = new ethers.Wallet(ORACLE_PRIVATE_KEY, provider);
+const wallet = new ethers.Wallet(ORACLE_PRIVATE_KEY, provider);
 const contract = new ethers.Contract(MILESTONE_MANAGER_ADDRESS, MILESTONE_MANAGER_ABI, wallet);
 
 // ─── In-memory processed set (restart-safe: just re-process; contracts are idempotent) ─
@@ -83,15 +83,43 @@ async function handleMilestoneSubmitted(campaignId, milestoneId, ipfsHash, url, 
 
 // ─── Historical catch-up ─────────────────────────────────────────────────────
 async function catchUp() {
-  const startBlock = parseInt(START_BLOCK, 10);
+  let startBlock = parseInt(START_BLOCK, 10);
   const currentBlock = await provider.getBlockNumber();
+
+  // Safety net: If START_BLOCK is 0 or missing, just start 5 blocks behind current
+  if (!startBlock || startBlock === 0) {
+    startBlock = currentBlock - 5;
+  }
+
   console.log(`[oracle] Catching up from block ${startBlock} to ${currentBlock}...`);
 
   const filter = contract.filters.MilestoneSubmitted();
-  const events = await contract.queryFilter(filter, startBlock, currentBlock);
-  console.log(`[oracle] Found ${events.length} historical MilestoneSubmitted events.`);
+  const CHUNK_SIZE = 10; // Alchemy free tier limit is 10 blocks per request
+  let allEvents = [];
 
-  for (const ev of events) {
+  // Loop through the blocks in chunks of 10
+  for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += CHUNK_SIZE) {
+    let toBlock = fromBlock + CHUNK_SIZE - 1;
+
+    // Make sure we don't ask for blocks in the future
+    if (toBlock > currentBlock) {
+      toBlock = currentBlock;
+    }
+
+    console.log(`[oracle] Fetching events from block ${fromBlock} to ${toBlock}...`);
+
+    try {
+      const events = await contract.queryFilter(filter, fromBlock, toBlock);
+      allEvents = allEvents.concat(events);
+    } catch (error) {
+      console.error(`[oracle] API Error fetching blocks ${fromBlock}-${toBlock}:`, error.message);
+    }
+  }
+
+  console.log(`[oracle] Found ${allEvents.length} historical MilestoneSubmitted events.`);
+
+  // Process any events it found
+  for (const ev of allEvents) {
     const [campaignId, milestoneId, ipfsHash, url] = ev.args;
     await handleMilestoneSubmitted(campaignId, milestoneId, ipfsHash, url, ev);
   }
