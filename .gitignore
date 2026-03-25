@@ -12,6 +12,9 @@
 web3/.env
 oracle-service/.env
 indexer/.env
+.env
+.env.local
+web3/.env
 
 
 # =============================================================================
