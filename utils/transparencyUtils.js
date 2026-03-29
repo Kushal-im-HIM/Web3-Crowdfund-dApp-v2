@@ -16,10 +16,14 @@
 const NETWORK = process.env.NEXT_PUBLIC_NETWORK || "localhost";
 const IS_LOCALHOST = NETWORK === "localhost";
 
-// Etherscan base URLs by network
-const ETHERSCAN_BASES = {
-  sepolia: "https://api-sepolia.etherscan.io/api",
-  mainnet: "https://api.etherscan.io/api",
+// Etherscan V2 unified endpoint (replaces the old per-network V1 URLs)
+// Migration guide: https://docs.etherscan.io/v2-migration
+const ETHERSCAN_V2_BASE = "https://api.etherscan.io/v2/api";
+
+// Chain IDs required by the V2 API
+const ETHERSCAN_CHAIN_IDS = {
+  sepolia: "11155111",
+  mainnet: "1",
   localhost: null,
 };
 
@@ -158,9 +162,9 @@ export async function fetchWalletTransactions(address) {
     return { data: buildMockTransactions(address), isMock: true };
   }
 
-  // ── Testnet / Mainnet: hit Etherscan ────────────────────────────────────
+  // ── Testnet / Mainnet: hit Etherscan V2 ─────────────────────────────────
   const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY;
-  const baseUrl = ETHERSCAN_BASES[NETWORK] ?? ETHERSCAN_BASES.sepolia;
+  const chainId = ETHERSCAN_CHAIN_IDS[NETWORK] ?? ETHERSCAN_CHAIN_IDS.sepolia;
 
   if (!apiKey) {
     throw new Error(
@@ -169,8 +173,10 @@ export async function fetchWalletTransactions(address) {
     );
   }
 
+  // V2 uses a single base URL — network is identified via chainid param
   const url =
-    `${baseUrl}?module=account&action=txlist` +
+    `${ETHERSCAN_V2_BASE}?chainid=${chainId}` +
+    `&module=account&action=txlist` +
     `&address=${address}` +
     `&startblock=0&endblock=99999999` +
     `&sort=desc&page=1&offset=25` +
