@@ -3,6 +3,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── ISSUE 2c FIX: Global light mode base colour ─────────────────────────────
+ * Replace the stark white (#ffffff) default with a warm cream (#FDFBF7).
+ * This eliminates the "blinding white" problem without touching dark mode.
+ * The .dark class selector ensures this rule is skipped in dark mode.
+ */
+html:not(.dark) {
+  background-color: #fdfbf7;
+}
+
+html:not(.dark) body {
+  background-color: #fdfbf7;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -62,9 +75,10 @@
   }
 }
 
+/* ISSUE 2c FIX: Light mode shimmer uses warm cream tones, not stark white */
 .animate-shimmer {
   animation: shimmer 1.2s ease-in-out infinite;
-  background: linear-gradient(to right, #f6f7f8 8%, #edeef1 18%, #f6f7f8 33%);
+  background: linear-gradient(to right, #f5f3ef 8%, #ebe9e4 18%, #f5f3ef 33%);
   background-size: 800px 104px;
 }
 
@@ -187,14 +201,22 @@
   @apply bg-secondary-100 text-secondary-800 dark:bg-secondary-900 dark:text-secondary-200;
 }
 
-/* Glass morphism effect */
+/*
+ * ISSUE 2c FIX — Glass morphism effect
+ *
+ * Before: rgba(255,255,255,0.1) — nearly invisible on a white/light background.
+ * After:  Light mode gets a solid white/80 card with a visible slate border.
+ *         Dark mode retains the original translucent aesthetic unchanged.
+ */
 .glass {
-  background: rgba(255, 255, 255, 0.1);
+  /* Light mode: opaque enough to be readable, soft border for definition */
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(100, 116, 139, 0.18); /* slate-500/18 */
 }
 
 .dark .glass {
+  /* Dark mode: original translucent dark, preserved exactly */
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }

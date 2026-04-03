@@ -8,12 +8,18 @@ import { uploadCampaignMetadata } from "../../utils/ipfs";
 import { CAMPAIGN_CREATION_FEE } from "../../constants";
 import { formatEther } from "../../utils/helpers";
 import ContractDebug from "../Debug/ContractDebug";
-import { CONTRACT_ADDRESS } from "../../constants";
+// CONTRACT_ADDRESS moved to useNetworkContracts() — live address per chain
+import { useNetworkContracts } from "../../hooks/useNetworkContracts";
 
 export default function CreateCampaignForm() {
   const router = useRouter();
   const { useCreateCampaignSimple } = useContract();
   const { createCampaignAsync, isLoading } = useCreateCampaignSimple();
+
+  // FROZEN ADDRESS FIX: live address for debug/error display only
+  // The actual contract call goes through useCreateCampaignSimple() which
+  // already uses useNetworkContracts() internally via useContract()
+  const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
 
   const [formData, setFormData] = useState({
     title: "",

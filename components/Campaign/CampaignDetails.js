@@ -14,7 +14,8 @@ import {
   formatEther, formatAddress, calculateTimeLeft,
   calculateProgress, formatDate, copyToClipboard,
 } from "../../utils/helpers";
-import { CONTRACT_ADDRESS } from "../../constants";
+// ERROR 2 FIX: replaced static import with live hook — see useNetworkContracts
+import { useNetworkContracts } from "../../hooks/useNetworkContracts";
 import { CROWDFUNDING_ABI } from "../../constants/abi";
 import MilestonePanel from "../Milestone/MilestonePanel";
 import MilestoneCreationForm from "../Milestone/MilestoneCreationForm";
@@ -26,6 +27,9 @@ export default function CampaignDetails({ campaignId }) {
     useCampaign, useCampaignStats, useContributeToCampaignSimple,
     useWithdrawFunds, useGetRefund, useContribution, useIsCampaignRegistered,
   } = useContract();
+
+  // ERROR 2 FIX: live contract address — updates when MetaMask switches chains
+  const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
 
   const [metadata, setMetadata] = useState(null);
   const [contributionAmount, setContributionAmount] = useState("");
@@ -327,8 +331,17 @@ export default function CampaignDetails({ campaignId }) {
         )}
 
         {/* Milestone list (or empty state) */}
+        {/*
+          ISSUE 1 FIX: Pass `campaign.raisedAmount` as the single source of truth.
+          MilestonePanel feeds this into `useWaterfallMilestones` so each milestone
+          fills visually based on total campaign funds, not direct milestone deposits.
+        */}
         {!showMilestoneSetup && (
-          <MilestonePanel campaignId={campaignId} creatorAddress={campaign.creator} />
+          <MilestonePanel
+            campaignId={campaignId}
+            creatorAddress={campaign.creator}
+            campaignRaisedAmount={campaign.raisedAmount}
+          />
         )}
 
         {/* Non-creator empty hint */}

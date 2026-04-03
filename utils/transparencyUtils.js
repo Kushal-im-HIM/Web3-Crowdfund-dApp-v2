@@ -152,19 +152,32 @@ function resolveMethodLabel(methodId, input) {
  * @param {string} address  - Ethereum address to look up
  * @returns {Promise<{ data: TransactionRecord[], isMock: boolean }>}
  */
+/**
+ * Legacy wrapper — keeps backward compatibility for any other callers.
+ * New callers should use fetchWalletTransactionsForChain() directly.
+ */
 export async function fetchWalletTransactions(address) {
+  return fetchWalletTransactionsForChain(address, IS_LOCALHOST, null);
+}
+
+/**
+ * ERROR 3 FIX — Runtime-aware fetch.
+ * Accepts live isLocalhost + chainId from useNetworkContracts() so the function
+ * targets the correct Etherscan chain even after MetaMask switches networks.
+ */
+export async function fetchWalletTransactionsForChain(address, isLocalhostRuntime, liveChainId) {
   if (!address) throw new Error("Address is required");
 
-  // ── Localhost: return mock data ──────────────────────────────────────────
-  if (IS_LOCALHOST) {
-    // Simulate a short network delay so loading states are testable
+  if (isLocalhostRuntime) {
     await new Promise((r) => setTimeout(r, 600));
     return { data: buildMockTransactions(address), isMock: true };
   }
 
-  // ── Testnet / Mainnet: hit Etherscan V2 ─────────────────────────────────
   const apiKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY;
-  const chainId = ETHERSCAN_CHAIN_IDS[NETWORK] ?? ETHERSCAN_CHAIN_IDS.sepolia;
+  // Use live chainId if available, otherwise fall back to env-derived value
+  const chainId = liveChainId
+    ? String(liveChainId)
+    : (ETHERSCAN_CHAIN_IDS[NETWORK] ?? ETHERSCAN_CHAIN_IDS.sepolia);
 
   if (!apiKey) {
     throw new Error(

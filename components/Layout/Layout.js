@@ -11,7 +11,9 @@ export default function Layout({ children }) {
   const toggleSidebarCollapse = () => setSidebarCollapsed(!sidebarCollapsed);
 
   return (
-    <div className="min-h-screen bg-primary-50 dark:bg-primary-900">
+    // ISSUE 2c FIX: bg-stone-50 (warm #FAFAF9) in light mode instead of stark primary-50.
+    // dark:bg-primary-900 preserves the original dark mode background exactly.
+    <div className="min-h-screen bg-stone-50 dark:bg-primary-900">
       <Sidebar
         isOpen={sidebarOpen}
         onToggle={toggleSidebar}

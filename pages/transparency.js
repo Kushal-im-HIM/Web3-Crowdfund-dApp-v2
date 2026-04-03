@@ -1,3 +1,23 @@
+/**
+ * pages/transparency.js
+ *
+ * ERROR 1 FIX — Light Theme for Transparency Dashboard
+ *   Hero header was `bg-gradient-to-br from-slate-800 to-slate-900` with no
+ *   light-mode override — permanently dark. Fixed with a dual-theme header:
+ *   cream/emerald in light mode, original dark slate in dark mode.
+ *
+ * ERROR 3 FIX — Network Stuck on Localhost + Theme Toggle
+ *   `IS_LOCALHOST` was a module-level constant baked from NEXT_PUBLIC_NETWORK at
+ *   boot. Switching MetaMask to Sepolia never updated it, so the page kept
+ *   showing "Running on localhost — wallet tab shows mock data" even on Sepolia.
+ *   Fix: replace the module constant with `useNetworkContracts()` so the banner,
+ *   network label, and fetchWalletTransactions() all respond to the live chain.
+ *
+ *   Theme toggle: The Header already handles isDark state correctly. The
+ *   "frozen" appearance was caused by the page-level IS_LOCALHOST baking
+ *   causing a mis-render. No separate theme state is needed here.
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import { ethers } from "ethers";
@@ -10,21 +30,22 @@ import {
 } from "react-icons/fi";
 import { toast } from "react-hot-toast";
 import { useContract } from "../hooks/useContract";
+import { useNetworkContracts } from "../hooks/useNetworkContracts";
 import {
   fetchWalletTransactions,
+  fetchWalletTransactionsForChain,
   truncateHex,
   getTxExplorerUrl,
   getAddressExplorerUrl,
 } from "../utils/transparencyUtils";
 import { formatEther, formatDate, copyToClipboard } from "../utils/helpers";
 
-const NETWORK     = process.env.NEXT_PUBLIC_NETWORK || "localhost";
-const IS_LOCALHOST = NETWORK === "localhost";
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Skeleton({ className }) {
-  return <div className={`animate-pulse rounded bg-gray-200 dark:bg-primary-700 ${className}`} />;
+  return (
+    <div className={`animate-pulse rounded bg-slate-200 dark:bg-primary-700 ${className}`} />
+  );
 }
 
 function StatusBadge({ status }) {
@@ -53,9 +74,9 @@ function MethodBadge({ label }) {
     registerCampaign:        "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
     createMilestone:         "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
     submitMilestoneEvidence: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
-    "ETH Transfer":          "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300",
+    "ETH Transfer":          "bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-300",
   };
-  const cls = colours[label] ?? "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300";
+  const cls = colours[label] ?? "bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-300";
   return (
     <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${cls}`}>
       {label}
@@ -65,18 +86,20 @@ function MethodBadge({ label }) {
 
 // ─── Tab: Wallet Transactions ─────────────────────────────────────────────────
 
-function WalletTransactionsTab({ address }) {
+function WalletTransactionsTab({ address, isLocalhost, chainId }) {
   const [txs, setTxs]         = useState([]);
   const [loading, setLoading] = useState(false);
   const [isMock, setIsMock]   = useState(false);
   const [error, setError]     = useState(null);
 
+  // ERROR 3 FIX: pass live chainId into the fetch so it targets the correct
+  // Etherscan chain rather than the boot-time IS_LOCALHOST constant
   const load = useCallback(async () => {
     if (!address) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchWalletTransactions(address);
+      const result = await fetchWalletTransactionsForChain(address, isLocalhost, chainId);
       setTxs(result.data);
       setIsMock(result.isMock);
     } catch (err) {
@@ -84,16 +107,15 @@ function WalletTransactionsTab({ address }) {
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, isLocalhost, chainId]);
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Loading state ──
   if (loading) {
     return (
       <div className="space-y-3 mt-4">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex items-center gap-4 p-4 border border-gray-200 dark:border-primary-700 rounded-xl">
+          <div key={i} className="flex items-center gap-4 p-4 border border-slate-200 dark:border-primary-700 rounded-xl">
             <Skeleton className="w-24 h-4" />
             <Skeleton className="w-20 h-4 flex-1" />
             <Skeleton className="w-20 h-4 flex-1" />
@@ -105,7 +127,6 @@ function WalletTransactionsTab({ address }) {
     );
   }
 
-  // ── Error state ──
   if (error) {
     return (
       <div className="mt-4 p-5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
@@ -121,109 +142,92 @@ function WalletTransactionsTab({ address }) {
     );
   }
 
-  // ── Empty state ──
   if (txs.length === 0) {
     return (
-      <div className="mt-6 text-center py-10 text-gray-400 dark:text-gray-600">
-        <FiActivity className="w-10 h-10 mx-auto mb-3 opacity-40" />
+      <div className="mt-6 text-center py-10 text-slate-400 dark:text-gray-600">
+        <FiDatabase className="w-10 h-10 mx-auto mb-3 opacity-40" />
         <p className="text-sm">No transactions found for this address.</p>
       </div>
     );
   }
 
+  const TABLE_HEADERS = ["TX Hash", "Method", "From", "To", "Value (ETH)", "Date", "Status"];
+
   return (
-    <div className="mt-4">
+    <div className="mt-2">
       {/* Mock data banner */}
       {isMock && (
         <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
           <FiDatabase className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <p className="text-xs text-amber-700 dark:text-amber-400">
-            <strong>Mock data</strong> — running on localhost. Switch to Sepolia to see real transactions.
+            <strong>Mock data</strong> — running on localhost.{" "}
+            Switch to Sepolia to see real transactions.
           </p>
         </div>
       )}
 
-      {/* Refresh button */}
+      {/* Refresh */}
       <div className="flex justify-end mb-2">
         <button
           onClick={load}
-          className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-secondary-600 dark:hover:text-secondary-400 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-gray-400 hover:text-secondary-600 dark:hover:text-secondary-400 transition-colors"
         >
           <FiRefreshCw className="w-3.5 h-3.5" /> Refresh
         </button>
       </div>
 
-      {/* Transactions table — desktop */}
-      <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 dark:border-primary-700">
+      {/* Desktop table */}
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 dark:border-primary-700">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 dark:bg-primary-800 border-b border-gray-200 dark:border-primary-700">
-              {["Tx Hash", "Method", "From", "To", "Value (ETH)", "Date", "Status"].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <tr className="bg-slate-50 dark:bg-primary-800 border-b border-slate-200 dark:border-primary-700">
+              {TABLE_HEADERS.map((h) => (
+                <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-primary-700">
+          <tbody className="divide-y divide-slate-100 dark:divide-primary-700">
             {txs.map((tx) => {
               const explorerUrl = getTxExplorerUrl(tx.hash);
               return (
                 <tr
                   key={tx.hash}
-                  className="hover:bg-gray-50 dark:hover:bg-primary-800/60 transition-colors"
+                  className="hover:bg-slate-50 dark:hover:bg-primary-800/60 transition-colors"
                 >
-                  {/* Hash */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono text-xs text-secondary-600 dark:text-secondary-400">
-                        {truncateHex(tx.hash, 8, 6)}
+                        {truncateHex(tx.hash, 6, 4)}
                       </span>
-                      {explorerUrl ? (
+                      {explorerUrl && (
                         <a href={explorerUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-gray-400 hover:text-secondary-500 transition-colors">
+                          className="text-slate-400 hover:text-secondary-500 transition-colors">
                           <FiExternalLink className="w-3 h-3" />
                         </a>
-                      ) : (
-                        <button
-                          onClick={() => copyToClipboard(tx.hash).then(() => toast.success("Copied!"))}
-                          className="text-gray-400 hover:text-secondary-500 transition-colors">
-                          <FiCopy className="w-3 h-3" />
-                        </button>
                       )}
                     </div>
                   </td>
-                  {/* Method */}
-                  <td className="px-4 py-3">
-                    <MethodBadge label={tx.methodLabel} />
-                  </td>
-                  {/* From */}
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">
+                  <td className="px-4 py-3"><MethodBadge label={tx.methodLabel} /></td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500 dark:text-gray-400">
                     {truncateHex(tx.from, 6, 4)}
                   </td>
-                  {/* To */}
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500 dark:text-gray-400">
                     {truncateHex(tx.to, 6, 4)}
                   </td>
-                  {/* Value */}
-                  <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white text-xs">
-                    {parseFloat(tx.value) === 0 ? (
-                      <span className="text-gray-400">—</span>
-                    ) : (
-                      `Ξ ${parseFloat(tx.value).toFixed(4)}`
-                    )}
+                  <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white text-xs">
+                    {parseFloat(tx.value) > 0
+                      ? <span>Ξ {parseFloat(tx.value).toFixed(4)}</span>
+                      : <span className="text-slate-400">—</span>
+                    }
                   </td>
-                  {/* Date */}
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    {new Date(tx.timestamp).toLocaleString([], {
-                      month: "short", day: "numeric",
-                      hour: "2-digit", minute: "2-digit",
-                    })}
+                  <td className="px-4 py-3 text-xs text-slate-500 dark:text-gray-400 whitespace-nowrap">
+                    {tx.timestamp
+                      ? new Date(tx.timestamp).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                      : "—"}
                   </td>
-                  {/* Status */}
-                  <td className="px-4 py-3">
-                    <StatusBadge status={tx.status} />
-                  </td>
+                  <td className="px-4 py-3"><StatusBadge status={tx.status} /></td>
                 </tr>
               );
             })}
@@ -231,40 +235,38 @@ function WalletTransactionsTab({ address }) {
         </table>
       </div>
 
-      {/* Mobile card list */}
-      <div className="md:hidden space-y-3">
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3 mt-3">
         {txs.map((tx) => {
           const explorerUrl = getTxExplorerUrl(tx.hash);
           return (
-            <div key={tx.hash} className="p-4 border border-gray-200 dark:border-primary-700 rounded-xl bg-white dark:bg-primary-800 space-y-2">
+            <div key={tx.hash} className="p-4 border border-slate-200 dark:border-primary-700 rounded-xl bg-white dark:bg-primary-800 space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-xs text-secondary-600 dark:text-secondary-400">
-                    {truncateHex(tx.hash, 6, 4)}
-                  </span>
-                  {explorerUrl && (
-                    <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
-                      <FiExternalLink className="w-3 h-3 text-gray-400" />
-                    </a>
-                  )}
-                </div>
-                <StatusBadge status={tx.status} />
+                <span className="font-mono text-xs text-secondary-600 dark:text-secondary-400">
+                  {truncateHex(tx.hash, 8, 6)}
+                </span>
+                {explorerUrl && (
+                  <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
+                    <FiExternalLink className="w-3 h-3 text-slate-400" />
+                  </a>
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <MethodBadge label={tx.methodLabel} />
-                <span className="text-xs font-semibold text-gray-900 dark:text-white">
-                  {parseFloat(tx.value) === 0 ? "—" : `Ξ ${parseFloat(tx.value).toFixed(4)}`}
+                <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                  {parseFloat(tx.value) > 0 ? `Ξ ${parseFloat(tx.value).toFixed(4)}` : "—"}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500">
-                {new Date(tx.timestamp).toLocaleString()}
+              <p className="text-xs text-slate-400 dark:text-gray-500">
+                {tx.timestamp ? new Date(tx.timestamp).toLocaleString() : "—"}
               </p>
+              <StatusBadge status={tx.status} />
             </div>
           );
         })}
       </div>
 
-      <p className="text-xs text-gray-400 dark:text-gray-600 text-center mt-4">
+      <p className="text-xs text-slate-400 dark:text-gray-600 text-center mt-4">
         Showing latest {txs.length} transactions
         {!isMock && " · Source: Etherscan"}
       </p>
@@ -272,30 +274,24 @@ function WalletTransactionsTab({ address }) {
   );
 }
 
-// ─── Tab: Campaign Activity (on-chain contract events) ────────────────────────
+// ─── Tab: Campaign Activity ────────────────────────────────────────────────────
 
 function CampaignActivityTab({ address }) {
-  const {
-    useUserCampaigns,
-    useUserContributions,
-    useMultipleCampaigns,
-  } = useContract();
+  const { useUserCampaigns, useUserContributions, useMultipleCampaigns } = useContract();
 
-  const { data: createdIds,      isLoading: loadingCreated }       = useUserCampaigns(address);
-  const { data: contributedIds,  isLoading: loadingContributed }   = useUserContributions(address);
+  const { data: createdIds,      isLoading: loadingCreated }     = useUserCampaigns(address);
+  const { data: contributedIds,  isLoading: loadingContributed } = useUserContributions(address);
 
   const { campaigns: createdCampaigns,     isLoading: loadingCreatedDetails }     = useMultipleCampaigns(createdIds);
   const { campaigns: contributedCampaigns, isLoading: loadingContributedDetails } = useMultipleCampaigns(contributedIds);
 
-  const isLoading =
-    loadingCreated || loadingContributed ||
-    loadingCreatedDetails || loadingContributedDetails;
+  const isLoading = loadingCreated || loadingContributed || loadingCreatedDetails || loadingContributedDetails;
 
   if (isLoading) {
     return (
       <div className="mt-4 space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="p-4 border border-gray-200 dark:border-primary-700 rounded-xl space-y-2">
+          <div key={i} className="p-4 border border-slate-200 dark:border-primary-700 rounded-xl space-y-2">
             <Skeleton className="h-4 w-1/3" />
             <Skeleton className="h-3 w-1/2" />
             <Skeleton className="h-2 w-1/4" />
@@ -310,7 +306,7 @@ function CampaignActivityTab({ address }) {
 
   if (!hasCreated && !hasContributed) {
     return (
-      <div className="mt-6 text-center py-10 text-gray-400 dark:text-gray-600">
+      <div className="mt-6 text-center py-10 text-slate-400 dark:text-gray-600">
         <FiDatabase className="w-10 h-10 mx-auto mb-3 opacity-40" />
         <p className="text-sm">No on-chain campaign activity found for this address.</p>
       </div>
@@ -320,12 +316,12 @@ function CampaignActivityTab({ address }) {
   return (
     <div className="mt-4 space-y-8">
 
-      {/* ── Campaigns Created ───────────────────────────────────────────── */}
+      {/* Campaigns Created */}
       {hasCreated && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <FiTarget className="w-4 h-4 text-secondary-500" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wide">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">
               Campaigns Created ({createdCampaigns.length})
             </h3>
           </div>
@@ -336,55 +332,34 @@ function CampaignActivityTab({ address }) {
               const progress = target > 0 ? Math.min((raised / target) * 100, 100) : 0;
               const expired  = Number(c.deadline) * 1000 < Date.now();
               const funded   = raised >= target;
-
               return (
                 <div key={c.id.toString()}
-                  className="p-4 bg-white dark:bg-primary-800 border border-gray-200 dark:border-primary-700 rounded-xl hover:shadow-md transition-shadow">
+                  className="p-4 bg-white dark:bg-primary-800 border border-slate-200 dark:border-primary-700 rounded-xl hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
-                        {c.title}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">{c.title}</p>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
                         ID #{c.id.toString()} · Created {formatDate(c.createdAt)}
                       </p>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
-                      {funded && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                          Funded
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        expired
-                          ? "bg-gray-100 dark:bg-gray-700 text-gray-500"
-                          : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                      }`}>
+                      {funded && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Funded</span>}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${expired ? "bg-slate-100 dark:bg-gray-700 text-slate-500" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"}`}>
                         {expired ? "Ended" : "Active"}
                       </span>
-                      {c.withdrawn && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
-                          Withdrawn
-                        </span>
-                      )}
+                      {c.withdrawn && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">Withdrawn</span>}
                     </div>
                   </div>
-
-                  {/* Funding progress */}
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-gray-400">
                       <span>Ξ {raised.toFixed(4)} raised</span>
                       <span>Target: Ξ {target.toFixed(4)} · {progress.toFixed(1)}%</span>
                     </div>
-                    <div className="w-full bg-gray-100 dark:bg-primary-700 rounded-full h-1.5">
-                      <div
-                        className="bg-gradient-to-r from-secondary-500 to-secondary-400 h-1.5 rounded-full transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
+                    <div className="w-full bg-slate-200 dark:bg-primary-700 rounded-full h-1.5">
+                      <div className="bg-gradient-to-r from-secondary-500 to-secondary-400 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-gray-400">
                     <FiUser className="w-3 h-3" />
                     <span>{c.contributorsCount?.toString() ?? "0"} backers</span>
                     <span>·</span>
@@ -397,12 +372,12 @@ function CampaignActivityTab({ address }) {
         </section>
       )}
 
-      {/* ── Campaigns Contributed To ─────────────────────────────────────── */}
+      {/* Campaigns Contributed To */}
       {hasContributed && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <FiHeart className="w-4 h-4 text-accent-500" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wide">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">
               Campaigns Backed ({contributedCampaigns.length})
             </h3>
           </div>
@@ -413,42 +388,27 @@ function CampaignActivityTab({ address }) {
               const progress = target > 0 ? Math.min((raised / target) * 100, 100) : 0;
               const expired  = Number(c.deadline) * 1000 < Date.now();
               const funded   = raised >= target;
-
               return (
                 <div key={c.id.toString()}
-                  className="p-4 bg-white dark:bg-primary-800 border border-gray-200 dark:border-primary-700 rounded-xl hover:shadow-md transition-shadow">
+                  className="p-4 bg-white dark:bg-primary-800 border border-slate-200 dark:border-primary-700 rounded-xl hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
-                        {c.title}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        ID #{c.id.toString()} by{" "}
-                        <span className="font-mono">{truncateHex(c.creator, 6, 4)}</span>
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">{c.title}</p>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
+                        ID #{c.id.toString()} by <span className="font-mono">{truncateHex(c.creator, 6, 4)}</span>
                       </p>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
-                      {funded && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                          Funded
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        expired
-                          ? "bg-gray-100 dark:bg-gray-700 text-gray-500"
-                          : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                      }`}>
+                      {funded && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Funded</span>}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${expired ? "bg-slate-100 dark:bg-gray-700 text-slate-500" : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"}`}>
                         {expired ? "Ended" : "Active"}
                       </span>
                     </div>
                   </div>
-                  <div className="w-full bg-gray-100 dark:bg-primary-700 rounded-full h-1.5 mt-2">
-                    <div
-                      className="bg-gradient-to-r from-accent-500 to-accent-400 h-1.5 rounded-full transition-all"
-                      style={{ width: `${progress}%` }}
-                    />
+                  <div className="w-full bg-slate-200 dark:bg-primary-700 rounded-full h-1.5 mt-2">
+                    <div className="bg-gradient-to-r from-accent-500 to-accent-400 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 text-right">
+                  <p className="text-xs text-slate-500 dark:text-gray-400 mt-1.5 text-right">
                     {progress.toFixed(1)}% funded · Ξ {raised.toFixed(4)} / Ξ {target.toFixed(4)}
                   </p>
                 </div>
@@ -470,13 +430,14 @@ const TABS = [
 
 export default function TransparencyPage() {
   const { address: connectedAddress } = useAccount();
+  // ERROR 3 FIX: live network state — updates when MetaMask chain switches
+  const { isLocalhost, name: networkName, chainId } = useNetworkContracts();
 
-  const [inputValue,     setInputValue]     = useState("");
+  const [inputValue,      setInputValue]      = useState("");
   const [searchedAddress, setSearchedAddress] = useState("");
-  const [activeTab,      setActiveTab]      = useState("wallet");
-  const [addressError,   setAddressError]   = useState("");
+  const [activeTab,       setActiveTab]       = useState("wallet");
+  const [addressError,    setAddressError]    = useState("");
 
-  // Pre-fill with connected wallet for convenience
   useEffect(() => {
     if (connectedAddress && !inputValue) {
       setInputValue(connectedAddress);
@@ -493,9 +454,7 @@ export default function TransparencyPage() {
     setSearchedAddress(trimmed.toLowerCase());
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleSearch();
-  };
+  const handleKeyDown = (e) => { if (e.key === "Enter") handleSearch(); };
 
   const handleCopyAddress = async () => {
     if (!searchedAddress) return;
@@ -509,23 +468,34 @@ export default function TransparencyPage() {
     <Layout>
       <div className="max-w-5xl mx-auto space-y-6 pb-16">
 
-        {/* ── Page Header ─────────────────────────────────────────────── */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 dark:from-slate-900 dark:to-primary-900 rounded-xl p-7 text-white shadow-lg border border-slate-700/50">
+        {/* ── ERROR 1 FIX: Page Header — dual theme ──────────────────────────
+            Light:  warm cream-to-emerald gradient, dark slate text
+            Dark:   original slate-800 → slate-900 gradient, white text
+        */}
+        <div className="relative overflow-hidden rounded-xl p-7 shadow-sm border
+          bg-gradient-to-br from-stone-100 via-emerald-50 to-stone-100 border-stone-200
+          dark:bg-gradient-to-br dark:from-slate-800 dark:to-slate-900 dark:border-slate-700/50">
+
+          {/* Decorative blurs — visible in both modes */}
           <div className="absolute -top-16 -right-16 w-48 h-48 bg-secondary-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-accent-500/10 rounded-full blur-3xl pointer-events-none" />
+
           <div className="relative z-10 flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <FiSearch className="w-5 h-5 text-secondary-400" />
-                <span className="text-xs font-bold text-secondary-400 uppercase tracking-widest">
+                <FiSearch className="w-5 h-5 text-secondary-600 dark:text-secondary-400" />
+                <span className="text-xs font-bold text-secondary-600 dark:text-secondary-400 uppercase tracking-widest">
                   Creator Audit Tool
                 </span>
               </div>
-              <h1 className="text-2xl font-bold text-white mb-1">Transparency Dashboard</h1>
-              <p className="text-slate-400 text-sm max-w-lg">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+                Transparency Dashboard
+              </h1>
+              <p className="text-slate-600 dark:text-slate-400 text-sm max-w-lg">
                 Paste any Ethereum address to audit their wallet transactions and on-chain campaign activity.
-                {IS_LOCALHOST && (
-                  <span className="ml-1 text-amber-400">
+                {/* ERROR 3 FIX: use live `isLocalhost` not boot-time constant */}
+                {isLocalhost && (
+                  <span className="ml-1 text-amber-600 dark:text-amber-400">
                     Running on localhost — wallet tab shows mock data.
                   </span>
                 )}
@@ -534,14 +504,14 @@ export default function TransparencyPage() {
           </div>
         </div>
 
-        {/* ── Search Bar ──────────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-primary-800 rounded-xl shadow border border-gray-200 dark:border-primary-700 p-5">
-          <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
+        {/* ── Search Bar ──────────────────────────────────────────────────── */}
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-sm border border-slate-200 dark:border-primary-700 p-5">
+          <label className="block text-xs font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider mb-2">
             Creator / Wallet Address
           </label>
           <div className="flex gap-3">
             <div className="flex-1 relative">
-              <FiUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <FiUser className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 value={inputValue}
@@ -549,10 +519,13 @@ export default function TransparencyPage() {
                 onKeyDown={handleKeyDown}
                 placeholder="0x..."
                 spellCheck={false}
-                className={`w-full pl-10 pr-4 py-3 border rounded-lg text-sm font-mono bg-white dark:bg-primary-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-secondary-500 outline-none transition-colors ${
+                className={`w-full pl-10 pr-4 py-3 border rounded-lg text-sm font-mono
+                  bg-white dark:bg-primary-700
+                  text-slate-900 dark:text-white
+                  focus:ring-2 focus:ring-secondary-500 outline-none transition-colors ${
                   addressError
                     ? "border-red-400 dark:border-red-600"
-                    : "border-gray-300 dark:border-primary-600"
+                    : "border-slate-300 dark:border-primary-600"
                 }`}
               />
             </div>
@@ -571,7 +544,6 @@ export default function TransparencyPage() {
             </p>
           )}
 
-          {/* Quick-fill connected wallet */}
           {connectedAddress && connectedAddress.toLowerCase() !== inputValue.toLowerCase() && (
             <button
               onClick={() => setInputValue(connectedAddress)}
@@ -582,39 +554,35 @@ export default function TransparencyPage() {
           )}
         </div>
 
-        {/* ── Results ─────────────────────────────────────────────────── */}
+        {/* ── Results ─────────────────────────────────────────────────────── */}
         {searchedAddress && (
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow border border-gray-200 dark:border-primary-700 p-5">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-sm border border-slate-200 dark:border-primary-700 p-5">
 
-            {/* Searched address row */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-secondary-500 to-accent-500 flex items-center justify-center shrink-0">
                   <FiUser className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p className="font-mono text-sm font-semibold text-gray-900 dark:text-white break-all">
+                  <p className="font-mono text-sm font-semibold text-slate-900 dark:text-white break-all">
                     {searchedAddress}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {IS_LOCALHOST ? "Localhost network" : `${NETWORK.charAt(0).toUpperCase() + NETWORK.slice(1)} network`}
+                  {/* ERROR 3 FIX: live networkName */}
+                  <p className="text-xs text-slate-500 dark:text-gray-400">
+                    {networkName} network
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopyAddress}
-                  className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-secondary-600 dark:hover:text-secondary-400 border border-gray-200 dark:border-primary-600 px-3 py-1.5 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-gray-400 hover:text-secondary-600 dark:hover:text-secondary-400 border border-slate-200 dark:border-primary-600 px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <FiCopy className="w-3.5 h-3.5" /> Copy
                 </button>
                 {explorerUrl && (
-                  <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-secondary-600 dark:hover:text-secondary-400 border border-gray-200 dark:border-primary-600 px-3 py-1.5 rounded-lg transition-colors"
-                  >
+                  <a href={explorerUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-gray-400 hover:text-secondary-600 dark:hover:text-secondary-400 border border-slate-200 dark:border-primary-600 px-3 py-1.5 rounded-lg transition-colors">
                     <FiExternalLink className="w-3.5 h-3.5" /> Etherscan
                   </a>
                 )}
@@ -622,18 +590,15 @@ export default function TransparencyPage() {
             </div>
 
             {/* Tabs */}
-            <div className="border-b border-gray-200 dark:border-primary-700 mb-2">
+            <div className="border-b border-slate-200 dark:border-primary-700 mb-2">
               <nav className="flex gap-6">
                 {TABS.map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    onClick={() => setActiveTab(id)}
+                  <button key={id} onClick={() => setActiveTab(id)}
                     className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors ${
                       activeTab === id
                         ? "border-secondary-500 text-secondary-600 dark:text-secondary-400"
-                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                    }`}
-                  >
+                        : "border-transparent text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-300"
+                    }`}>
                     <Icon className="w-4 h-4" />
                     {label}
                   </button>
@@ -641,9 +606,9 @@ export default function TransparencyPage() {
               </nav>
             </div>
 
-            {/* Tab panels */}
             {activeTab === "wallet" && (
-              <WalletTransactionsTab address={searchedAddress} />
+              /* ERROR 3 FIX: pass live isLocalhost + chainId to the tab */
+              <WalletTransactionsTab address={searchedAddress} isLocalhost={isLocalhost} chainId={chainId} />
             )}
             {activeTab === "activity" && (
               <CampaignActivityTab address={searchedAddress} />
@@ -651,9 +616,9 @@ export default function TransparencyPage() {
           </div>
         )}
 
-        {/* ── Empty prompt ────────────────────────────────────────────── */}
+        {/* ── Empty state ─────────────────────────────────────────────────── */}
         {!searchedAddress && (
-          <div className="text-center py-14 text-gray-400 dark:text-gray-600">
+          <div className="text-center py-14 text-slate-400 dark:text-gray-600">
             <FiSearch className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="text-sm">Enter an address above and press <strong>Audit</strong> to begin.</p>
           </div>
