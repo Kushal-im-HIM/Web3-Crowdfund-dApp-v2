@@ -92,7 +92,11 @@ export default function CampaignDetails({ campaignId }) {
   const targetAmount = formatEther(campaign.targetAmount);
   const isCreator = address?.toLowerCase() === campaign.creator?.toLowerCase();
   const isSuccessful = parseFloat(raisedAmount) >= parseFloat(targetAmount);
-  const canWithdraw = isCreator && timeLeft.expired && isSuccessful && !campaign.withdrawn;
+  // HYBRID WITHDRAWAL FIX: canWithdraw no longer requires timeLeft.expired.
+  // The contract's withdrawCampaignFunds() no longer has the campaignEnded modifier,
+  // so once raisedAmount >= targetAmount the creator may withdraw immediately.
+  // getRefund() is unaffected — it still requires deadline passed + target unmet.
+  const canWithdraw = isCreator && isSuccessful && !campaign.withdrawn;
   const canGetRefund = !isCreator && timeLeft.expired && !isSuccessful && userContribution > 0;
 
   // Contributions processing

@@ -253,7 +253,23 @@ contract CrowdfundingMarketplace is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * @dev Withdraw funds from successful campaign
+     * @dev Withdraw funds from a successful campaign.
+     *
+     * HYBRID WITHDRAWAL (Feature Update):
+     *   The creator may withdraw funds as soon as raisedAmount >= targetAmount,
+     *   WITHOUT waiting for the campaign deadline to expire.
+     *
+     *   Logic:
+     *     - If target IS reached  → immediate withdrawal allowed (deadline bypassed).
+     *     - If target NOT reached → require(raisedAmount >= targetAmount) reverts,
+     *       so this function is simply uncallable; contributors use getRefund().
+     *
+     *   CRITICAL: getRefund() is intentionally unchanged. It still enforces:
+     *     1. campaignEnded modifier  (deadline must be past)
+     *     2. raisedAmount < targetAmount  (campaign must have failed)
+     *   There is therefore NO logical path where both creator withdrawal AND
+     *   contributor refunds are possible on the same campaign.
+     *
      * @param _campaignId Campaign ID to withdraw from
      */
     function withdrawCampaignFunds(
@@ -262,7 +278,8 @@ contract CrowdfundingMarketplace is ReentrancyGuard, Ownable, Pausable {
         external
         validCampaign(_campaignId)
         onlyCampaignCreator(_campaignId)
-        campaignEnded(_campaignId)
+        // NOTE: `campaignEnded` modifier intentionally REMOVED.
+        // The require below is the sole withdrawal gate: target reached = permitted.
         nonReentrant
     {
         Campaign storage campaign = campaigns[_campaignId];
@@ -274,7 +291,7 @@ contract CrowdfundingMarketplace is ReentrancyGuard, Ownable, Pausable {
 
         campaign.withdrawn = true;
 
-        // Transfer full amount to creator (no platform commission)
+        // Transfer full raised amount to creator (no platform commission)
         campaign.creator.transfer(campaign.raisedAmount);
 
         emit CampaignWithdrawn(_campaignId, msg.sender, campaign.raisedAmount);

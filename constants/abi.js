@@ -60,6 +60,8 @@ export const MILESTONE_MANAGER_ABI = [
   { name: "voteMilestone", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }, { name: "_inFavour", type: "bool" }], outputs: [] },
   { name: "withdrawMilestoneFunds", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }], outputs: [] },
   { name: "claimMilestoneRefund", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }], outputs: [] },
+  // Admin setters
+  { name: "setCrowdfundingMarketplace", type: "function", stateMutability: "nonpayable", inputs: [{ name: "_marketplace", type: "address" }], outputs: [] },
   {
     name: "getMilestone", type: "function", stateMutability: "view",
     inputs: [{ name: "_campaignId", type: "uint256" }, { name: "_milestoneId", type: "uint256" }],

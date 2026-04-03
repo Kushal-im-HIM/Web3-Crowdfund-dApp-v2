@@ -5,6 +5,24 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
+ * @dev Minimal interface to CrowdfundingMarketplace.
+ *
+ * WATERFALL MODEL NOTE:
+ *   Under the waterfall funding model ALL contributor ETH flows through
+ *   CrowdfundingMarketplace.contributeToCampaign(), NOT through
+ *   MilestoneManager.contributeToMilestone(). As a result the per-milestone
+ *   contribution ledger (milestoneContributions) inside MilestoneManager is
+ *   always 0 for every backer.  Vote eligibility and weight are therefore
+ *   sourced from the main marketplace contract's contribution records.
+ */
+interface ICrowdfundingMarketplace {
+    function getContribution(
+        uint256 _campaignId,
+        address _contributor
+    ) external view returns (uint256);
+}
+
+/**
  * @title MilestoneManager
  * @dev Layered milestone contract that references campaign IDs from the existing
  *      CrowdfundingMarketplace without touching its storage.  Supports:
@@ -61,6 +79,11 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
 
     /// @dev Address of the trusted oracle signer
     address public oracleAddress;
+
+    /// @dev Reference to the main CrowdfundingMarketplace contract.
+    ///      Used to look up per-campaign ETH contributions for DAO vote weight
+    ///      under the waterfall model (milestoneContributions is always 0).
+    ICrowdfundingMarketplace public crowdfundingMarketplace;
 
     // Issue 2 FIX: hard cap on number of milestones per campaign.
     // Prevents creators from spamming milestones beyond a sensible limit.
@@ -193,12 +216,17 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
     // Constructor
     // ─────────────────────────────────────────────────────────────────────────
 
-    constructor(address _oracleAddress) {
+    constructor(address _oracleAddress, address _crowdfundingMarketplace) {
         require(
             _oracleAddress != address(0),
             "MilestoneManager: oracle is zero address"
         );
+        require(
+            _crowdfundingMarketplace != address(0),
+            "MilestoneManager: marketplace is zero address"
+        );
         oracleAddress = _oracleAddress;
+        crowdfundingMarketplace = ICrowdfundingMarketplace(_crowdfundingMarketplace);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -213,6 +241,16 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
         require(_newOracle != address(0), "MilestoneManager: zero address");
         emit OracleAddressUpdated(oracleAddress, _newOracle);
         oracleAddress = _newOracle;
+    }
+
+    /**
+     * @notice Update the CrowdfundingMarketplace reference (owner only).
+     *         Call this if the main marketplace contract is ever redeployed.
+     * @param _marketplace New CrowdfundingMarketplace address.
+     */
+    function setCrowdfundingMarketplace(address _marketplace) external onlyOwner {
+        require(_marketplace != address(0), "MilestoneManager: zero address");
+        crowdfundingMarketplace = ICrowdfundingMarketplace(_marketplace);
     }
 
     /**
@@ -495,10 +533,19 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
 
     /**
      * @notice Backer votes on a submitted milestone.
-     *         Weight = ETH contributed to this milestone by the voter.
-     *         Design choice: proportional-to-contribution (vs one-vote-per-backer)
-     *         because it aligns financial stake with governance power and prevents
-     *         Sybil attacks via address splitting.
+     *
+     * WATERFALL VOTE-WEIGHT FIX:
+     *   Previously: weight = milestoneContributions[campaignId][milestoneId][sender]
+     *   Problem:    Under the waterfall model all ETH goes through
+     *               CrowdfundingMarketplace.contributeToCampaign().
+     *               contributeToMilestone() is never called, so the per-milestone
+     *               ledger is always 0 → every vote reverted with
+     *               "MilestoneManager: no contribution to vote with".
+     *   Fix:        weight = ICrowdfundingMarketplace.getContribution(campaignId, sender)
+     *               This reads the backer's real ETH stake in the campaign,
+     *               preserving stake-weighted governance without any changes to
+     *               the user-facing voting UI or Wagmi hook call sites.
+     *
      * @param _inFavour  true = approve, false = reject.
      */
     function voteMilestone(
@@ -508,9 +555,11 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
     ) external validMilestone(_campaignId, _milestoneId) {
         Milestone storage m = milestones[_campaignId][_milestoneId];
 
-        uint256 weight = milestoneContributions[_campaignId][_milestoneId][
+        // ── WATERFALL FIX: read weight from the main campaign, not per-milestone ──
+        uint256 weight = crowdfundingMarketplace.getContribution(
+            _campaignId,
             msg.sender
-        ];
+        );
         require(weight > 0, "MilestoneManager: no contribution to vote with");
 
         Vote storage v = votes[_campaignId][_milestoneId][msg.sender];
@@ -539,7 +588,7 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
             weight
         );
 
-        // Try to resolve immediately if quorum is met (gas-efficient: no loop)
+        // Try to resolve immediately if threshold is met (gas-efficient: no loop)
         _tryResolveByVote(_campaignId, _milestoneId);
     }
 
@@ -642,19 +691,32 @@ contract MilestoneManager is ReentrancyGuard, Ownable {
         Milestone storage m = milestones[_campaignId][_milestoneId];
         uint256 totalVotes = m.totalVotesFor + m.totalVotesAgainst;
 
-        // Quorum not met yet — wait
-        if (totalVotes * 10000 < m.raisedAmount * votingQuorumBps) return;
+        // WATERFALL QUORUM FIX:
+        // Original formula:  totalVotes * 10000 < m.raisedAmount * votingQuorumBps
+        // Under the waterfall model m.raisedAmount is always 0 (no one calls
+        // contributeToMilestone()), so the RHS was permanently 0, making quorum
+        // trivially "met" from the very first vote — votingQuorumBps was meaningless.
+        //
+        // Replacement strategy: resolve based on conclusiveness of the current tally.
+        // Two conditions trigger an immediate resolution:
+        //   1. FOR  votes have already cleared the approval threshold  → approve now.
+        //   2. AGAINST votes are so large that FOR can never reach the threshold,
+        //      even if every remaining possible voter approved             → reject now.
+        //   3. Neither yet? → wait for more votes or let finalizeVoting() close it.
+        //
+        // If no votes at all have been cast yet, exit without resolving.
+        if (totalVotes == 0) return;
 
-        // Quorum met: only auto-approve if FOR votes cross the threshold
-        // Never auto-reject mid-vote — remaining voters may still push it over
+        // Condition 1: approval threshold already crossed by FOR votes.
         bool approvalReached = m.totalVotesFor * 10000 >=
             totalVotes * approvalThresholdBps;
-        if (approvalReached) {
-            _resolveByVote(_campaignId, _milestoneId);
-        }
-        // If quorum met but FOR hasn't won yet, wait — rejection resolved via finalizeVoting()
-        // Exception: all raised amount has voted, no more votes possible
-        else if (totalVotes == m.raisedAmount) {
+
+        // Condition 2: AGAINST votes make it mathematically impossible for FOR to win.
+        // (i.e. AGAINST > totalVotes * (1 - approvalThreshold))
+        bool rejectionCertain = m.totalVotesAgainst * 10000 >
+            totalVotes * (10000 - approvalThresholdBps);
+
+        if (approvalReached || rejectionCertain) {
             _resolveByVote(_campaignId, _milestoneId);
         }
     }

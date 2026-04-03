@@ -4,14 +4,33 @@ const NETWORK = process.env.NEXT_PUBLIC_NETWORK || "localhost";
 const IS_LOCALHOST = NETWORK === "localhost";
 
 // ─── Active addresses (auto-selected by NETWORK) ──────────────────────────
+/**
+ * @deprecated Import this value via `useNetworkContracts().contractAddress` instead.
+ *
+ * WHY: This export is evaluated ONCE at server/bundle boot time from
+ * NEXT_PUBLIC_NETWORK. If the user switches chains in MetaMask at runtime the
+ * value here never updates, causing every contract call that uses it to silently
+ * target the wrong network.
+ *
+ * SAFE USAGE (inside a React component or custom hook):
+ *   const { contractAddress } = useNetworkContracts();
+ */
 export const CONTRACT_ADDRESS = IS_LOCALHOST
   ? process.env.NEXT_PUBLIC_LOCALHOST_CONTRACT_ADDRESS
   : process.env.NEXT_PUBLIC_SEPOLIA_CONTRACT_ADDRESS;
 
+/**
+ * @deprecated Import this value via `useNetworkContracts().milestoneAddress` instead.
+ * @see CONTRACT_ADDRESS deprecation notice above — same root cause applies.
+ */
 export const MILESTONE_MANAGER_ADDRESS = IS_LOCALHOST
   ? process.env.NEXT_PUBLIC_LOCALHOST_MILESTONE_ADDRESS
   : process.env.NEXT_PUBLIC_SEPOLIA_MILESTONE_ADDRESS;
 
+/**
+ * @deprecated Import this value via `useNetworkContracts().adminAddress` instead.
+ * @see CONTRACT_ADDRESS deprecation notice above — same root cause applies.
+ */
 export const ADMIN_ADDRESS = IS_LOCALHOST
   ? process.env.NEXT_PUBLIC_LOCALHOST_ADMIN_ADDRESS
   : process.env.NEXT_PUBLIC_SEPOLIA_ADMIN_ADDRESS;
