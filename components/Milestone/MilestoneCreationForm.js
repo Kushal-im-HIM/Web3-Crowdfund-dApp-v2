@@ -76,15 +76,10 @@ export default function MilestoneCreationForm({ campaignId, campaignTarget, onDo
 
   // Step 1
   const handleRegister = () => {
-    if (!campaignId && campaignId !== 0) return toast.error("No campaign ID.");
-    const targetWei = campaignTarget
-      ? ethers.utils.parseEther(campaignTarget.toString())
-      : undefined;
-    if (!targetWei || targetWei.isZero())
-      return toast.error("Campaign target missing — cannot enable milestones.");
-    setStep("confirming");
-    register({ args: [campaignId, targetWei] });
-  };
+  if (!campaignId && campaignId !== 0) return toast.error("No campaign ID.");
+  setStep("confirming");
+  register({ args: [campaignId] });
+};
 
   // Step 2
   const handleSaveAll = () => {
