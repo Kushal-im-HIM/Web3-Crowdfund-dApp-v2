@@ -1,39 +1,76 @@
 /* styles/globals.css */
+/*
+ * MANDATE 5 — Global Light Mode Overhaul
+ *
+ * Palette: "Cream & Emerald"
+ * ──────────────────────────────────────────────────────────────────────────
+ *  Background base  →  #F7F3ED  (warm cream, like aged paper — no stark white)
+ *  Surface / card   →  #FDFAF6  (slightly lighter cream for cards)
+ *  Border / divider →  #E8E0D5  (warm sand tone)
+ *  Text primary     →  #2D2926  (dark warm brown — easier on eyes than #000)
+ *  Text secondary   →  #6B5E52  (muted warm brown)
+ *  Accent emerald   →  #059669  (secondary-600 — earthy, not neon)
+ *  Accent emerald bg→  #ECFDF5  (very soft mint for highlighted areas)
+ * ──────────────────────────────────────────────────────────────────────────
+ * Dark mode is untouched — all dark: classes below preserve the original.
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── ISSUE 2c FIX: Global light mode base colour ─────────────────────────────
- * Replace the stark white (#ffffff) default with a warm cream (#FDFBF7).
- * This eliminates the "blinding white" problem without touching dark mode.
- * The .dark class selector ensures this rule is skipped in dark mode.
- */
+/* ── Base background — warm cream instead of stark white ──────────────────── */
 html:not(.dark) {
-  background-color: #fdfbf7;
+  background-color: #f7f3ed;
+  color: #2d2926;
 }
 
 html:not(.dark) body {
-  background-color: #fdfbf7;
+  background-color: #f7f3ed;
+  color: #2d2926;
 }
 
-/* Custom scrollbar */
+/* ── Tailwind base layer overrides for light mode ─────────────────────────── */
+@layer base {
+  /* Card and surface backgrounds — cream, not white */
+  .light-surface {
+    background-color: #fdfaf6;
+    border-color: #e8e0d5;
+  }
+
+  /* Softer input backgrounds in light mode */
+  html:not(.dark) input,
+  html:not(.dark) select,
+  html:not(.dark) textarea {
+    background-color: #fdfaf6;
+    border-color: #d5c9bc;
+    color: #2d2926;
+  }
+
+  html:not(.dark) input::placeholder,
+  html:not(.dark) textarea::placeholder {
+    color: #9c8878;
+  }
+}
+
+/* ── Custom scrollbar ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-gray-700;
+  @apply bg-amber-50 dark:bg-gray-700;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+  @apply bg-stone-300 dark:bg-gray-600 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400 dark:bg-gray-500;
+  @apply bg-stone-400 dark:bg-gray-500;
 }
 
-/* Custom utilities */
+/* ── Line clamp utilities ─────────────────────────────────────────────────── */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -48,7 +85,7 @@ html:not(.dark) body {
   overflow: hidden;
 }
 
-/* Gradient animations */
+/* ── Gradient animations ──────────────────────────────────────────────────── */
 @keyframes gradient-x {
   0%,
   100% {
@@ -65,7 +102,7 @@ html:not(.dark) body {
   animation: gradient-x 3s ease infinite;
 }
 
-/* Loading animations */
+/* ── Loading / shimmer ────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0% {
     background-position: -468px 0;
@@ -75,25 +112,19 @@ html:not(.dark) body {
   }
 }
 
-/* ISSUE 2c FIX: Light mode shimmer uses warm cream tones, not stark white */
+/* MANDATE 5: Light mode shimmer uses warm cream tones */
 .animate-shimmer {
   animation: shimmer 1.2s ease-in-out infinite;
-  background: linear-gradient(to right, #f5f3ef 8%, #ebe9e4 18%, #f5f3ef 33%);
+  background: linear-gradient(to right, #f0ece5 8%, #e6e0d6 18%, #f0ece5 33%);
   background-size: 800px 104px;
 }
 
-/* Dark mode shimmer */
 .dark .animate-shimmer {
   background: linear-gradient(to right, #374151 8%, #4b5563 18%, #374151 33%);
   background-size: 800px 104px;
 }
 
-/* Custom focus styles */
-.focus-visible\:ring-offset-2:focus-visible {
-  ring-offset-width: 2px;
-}
-
-/* Button hover effects */
+/* ── Button hover lift ────────────────────────────────────────────────────── */
 .btn-hover-lift {
   transition: all 0.2s ease-in-out;
 }
@@ -101,8 +132,8 @@ html:not(.dark) body {
 .btn-hover-lift:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    0 10px 25px -5px rgba(0, 0, 0, 0.08),
+    0 10px 10px -5px rgba(0, 0, 0, 0.03);
 }
 
 .dark .btn-hover-lift:hover {
@@ -111,7 +142,7 @@ html:not(.dark) body {
     0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
-/* Card hover effects */
+/* ── Card hover ───────────────────────────────────────────────────────────── */
 .card-hover {
   transition: all 0.3s ease-in-out;
 }
@@ -119,8 +150,8 @@ html:not(.dark) body {
 .card-hover:hover {
   transform: translateY(-4px);
   box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    0 20px 25px -5px rgba(0, 0, 0, 0.07),
+    0 10px 10px -5px rgba(0, 0, 0, 0.03);
 }
 
 .dark .card-hover:hover {
@@ -129,7 +160,7 @@ html:not(.dark) body {
     0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
-/* Progress bar animations */
+/* ── Progress bar animations ──────────────────────────────────────────────── */
 .progress-bar {
   background-size: 40px 40px;
   background-image: linear-gradient(
@@ -154,7 +185,7 @@ html:not(.dark) body {
   }
 }
 
-/* Toast customizations */
+/* ── Toast customizations ─────────────────────────────────────────────────── */
 .toast-success {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
@@ -163,13 +194,13 @@ html:not(.dark) body {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 }
 
-/* Modal backdrop */
+/* ── Modal backdrop ───────────────────────────────────────────────────────── */
 .modal-backdrop {
   backdrop-filter: blur(4px);
   background-color: rgba(0, 0, 0, 0.5);
 }
 
-/* Responsive text utilities */
+/* ── Responsive text utilities ────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .text-responsive-xl {
     font-size: 1.5rem;
@@ -184,7 +215,7 @@ html:not(.dark) body {
   }
 }
 
-/* Status badges */
+/* ── Status badges ────────────────────────────────────────────────────────── */
 .status-active {
   @apply bg-secondary-100 text-secondary-800 dark:bg-secondary-900 dark:text-secondary-200;
 }
@@ -198,52 +229,68 @@ html:not(.dark) body {
 }
 
 .status-funded {
-  @apply bg-secondary-100 text-secondary-800 dark:bg-secondary-900 dark:text-secondary-200;
+  @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200;
 }
 
 /*
- * ISSUE 2c FIX — Glass morphism effect
+ * MANDATE 5 — Glass morphism
  *
- * Before: rgba(255,255,255,0.1) — nearly invisible on a white/light background.
- * After:  Light mode gets a solid white/80 card with a visible slate border.
- *         Dark mode retains the original translucent aesthetic unchanged.
+ * Light mode: opaque warm cream card — visible and readable, with a warm
+ *             sand border for definition. No blinding white.
+ * Dark mode:  original translucent dark — unchanged.
  */
 .glass {
-  /* Light mode: opaque enough to be readable, soft border for definition */
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(253, 250, 246, 0.92); /* warm cream/90 */
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(100, 116, 139, 0.18); /* slate-500/18 */
+  border: 1px solid rgba(180, 160, 140, 0.25); /* warm sand border */
 }
 
 .dark .glass {
-  /* Dark mode: original translucent dark, preserved exactly */
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Gradient text */
+/* ── Gradient text ────────────────────────────────────────────────────────── */
 .gradient-text {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Border gradient */
+/* ── Border gradient — updated to emerald ─────────────────────────────────── */
 .border-gradient {
   border: 2px solid transparent;
   background:
-    linear-gradient(white, white) padding-box,
-    linear-gradient(135deg, #667eea 0%, #764ba2 100%) border-box;
+    linear-gradient(#fdfaf6, #fdfaf6) padding-box,
+    linear-gradient(135deg, #10b981 0%, #059669 100%) border-box;
 }
 
 .dark .border-gradient {
   background:
     linear-gradient(#1f2937, #1f2937) padding-box,
-    linear-gradient(135deg, #667eea 0%, #764ba2 100%) border-box;
+    linear-gradient(135deg, #10b981 0%, #059669 100%) border-box;
 }
 
-/* Print styles */
+/*
+ * MANDATE 5 — Emerald funded badge glow pulse
+ * Used on campaign cards for the "✓ Successfully Funded" badge.
+ */
+@keyframes emerald-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.8);
+  }
+}
+
+.funded-glow {
+  animation: emerald-pulse 2s ease-in-out infinite;
+}
+
+/* ── Print styles ─────────────────────────────────────────────────────────── */
 @media print {
   .no-print {
     display: none !important;

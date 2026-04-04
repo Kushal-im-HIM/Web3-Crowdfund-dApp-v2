@@ -21,6 +21,12 @@ import "@openzeppelin/contracts/security/Pausable.sol";
  *     campaign stake) before resolving. One early vote can no longer flip the status
  *     and lock out all other backers. Vote tracking remains per-user via
  *     mapping(cId => mId => voter => Vote).
+ *
+ * ZOMBIE CAMPAIGN FIX (UI Mandate 1):
+ *   contributeToCampaign now has an EXPLICIT hard-cap revert at the very top of
+ *   the function body — before any state reads or mutations — so the revert
+ *   reason is unambiguous and auditable on-chain:
+ *     "Hard cap reached: campaign is fully funded"
  */
 contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // ─────────────────────────────────────────────────────────────────────────
@@ -28,12 +34,12 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // ─────────────────────────────────────────────────────────────────────────
 
     enum MilestoneStatus {
-        Pending, // 0 – created, awaiting evidence
+        Pending,   // 0 – created, awaiting evidence
         Submitted, // 1 – evidence submitted, voting/oracle window open
-        Approved, // 2 – oracle or DAO approved
-        Rejected, // 3 – oracle or DAO rejected
-        Released, // 4 – funds withdrawn by creator
-        Refunded // 5 – funds refunded to contributors
+        Approved,  // 2 – oracle or DAO approved
+        Rejected,  // 3 – oracle or DAO rejected
+        Released,  // 4 – funds withdrawn by creator
+        Refunded   // 5 – funds refunded to contributors
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -394,6 +400,18 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         );
     }
 
+    /**
+     * @notice Contribute ETH to an active campaign.
+     *
+     * ZOMBIE CAMPAIGN FIX:
+     *   The very first check is an EXPLICIT hard-cap revert. This fires before
+     *   any storage reads or the `remaining` calculation, producing a clean,
+     *   unambiguous revert reason on-chain:
+     *     "Hard cap reached: campaign is fully funded"
+     *
+     *   Any ETH sent beyond the remaining allowance is automatically refunded
+     *   to the contributor (unchanged behaviour from the original contract).
+     */
     function contributeToCampaign(
         uint256 _cId
     )
@@ -410,14 +428,22 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
             "Creator cannot contribute"
         );
 
+        // ── ZOMBIE CAMPAIGN FIX: explicit hard-cap revert ─────────────────
+        // Revert immediately if the campaign has already reached its target.
+        // This is checked BEFORE any state mutation so it costs minimal gas
+        // and produces a clear, auditable reason string.
+        require(
+            campaigns[_cId].raisedAmount < campaigns[_cId].targetAmount,
+            "Hard cap reached: campaign is fully funded"
+        );
+        // ─────────────────────────────────────────────────────────────────
+
         Campaign storage c = campaigns[_cId];
-        uint256 remaining = c.targetAmount > c.raisedAmount
-            ? c.targetAmount - c.raisedAmount
-            : 0;
-        require(remaining > 0, "Target already reached");
+        // Safe subtraction: hard-cap check above guarantees raisedAmount < targetAmount
+        uint256 remaining = c.targetAmount - c.raisedAmount;
 
         uint256 accepted = msg.value > remaining ? remaining : msg.value;
-        uint256 refund = msg.value - accepted;
+        uint256 refund   = msg.value - accepted;
 
         if (contributions[_cId][msg.sender] == 0) {
             c.contributorsCount++;
@@ -444,9 +470,7 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
      * MANDATE 2 FIX — Bypass Bug:
      *   If milestones are enabled for this campaign the function REVERTS.
      *   Funds may only leave the contract via withdrawMilestoneFunds() once
-     *   each milestone reaches status == Approved.  This eliminates the path
-     *   where a creator could drain the entire campaign balance before any
-     *   milestone was reviewed.
+     *   each milestone reaches status == Approved.
      */
     function withdrawCampaignFunds(
         uint256 _cId
@@ -484,12 +508,6 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // Milestone — Setup
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * @notice Enable the milestone system for a campaign.
-     *         Replaces the two-arg registerCampaign() from the old MilestoneManager.
-     *         campaignTarget is no longer needed — it lives in campaigns[_cId].targetAmount.
-     * @param _cId Campaign ID (caller must be creator).
-     */
     function registerCampaign(uint256 _cId) external onlyCampaignCreator(_cId) {
         require(!milestoneEnabled[_cId], "Milestones already enabled");
         milestoneEnabled[_cId] = true;
@@ -605,26 +623,6 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // Milestone — DAO Voting
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * @notice Cast an ETH-weighted DAO vote on a submitted milestone.
-     *
-     * MANDATE 2 FIX — Global Lockout Bug:
-     *   The old split-contract version read vote weight from
-     *   MilestoneManager.milestoneContributions which was always 0 under the
-     *   waterfall model → quorum was trivially met → one vote resolved the
-     *   milestone → all other backers lost access to the voting UI.
-     *
-     *   Fix A: Weight is read from `contributions[_cId][msg.sender]` directly
-     *          (the same mapping used by contributeToCampaign).
-     *
-     *   Fix B: `_tryResolveByVote` now uses `campaigns[_cId].raisedAmount` as
-     *          the quorum denominator. Resolution only triggers when at least
-     *          `votingQuorumBps` of total stake has participated.
-     *
-     *   Fix C: The per-user `hasVoted` flag is stored in
-     *          `votes[cId][mId][voter].hasVoted`, so each backer's state is
-     *          fully independent — one vote never affects another's record.
-     */
     function voteMilestone(
         uint256 _cId,
         uint256 _mId,
@@ -633,11 +631,9 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         Milestone storage m = milestones[_cId][_mId];
         require(m.status == MilestoneStatus.Submitted, "Voting not open");
 
-        // ── Fix C: per-user vote gate ──────────────────────────────────────
         Vote storage v = votes[_cId][_mId][msg.sender];
         require(!v.hasVoted, "Already voted");
 
-        // ── Fix A: weight from main campaign ledger ────────────────────────
         uint256 weight = contributions[_cId][msg.sender];
         require(weight > 0, "No contribution to vote with");
 
@@ -653,11 +649,9 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
 
         emit MilestoneVoted(_cId, _mId, msg.sender, _inFavour, weight);
 
-        // ── Fix B: attempt resolution only after quorum check ─────────────
         _tryResolveByVote(_cId, _mId);
     }
 
-    /// @notice Force resolution after the voting window expires (callable by anyone).
     function finalizeVoting(
         uint256 _cId,
         uint256 _mId
@@ -678,18 +672,6 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // Milestone — Fund Release
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * @notice Creator withdraws their share of campaign funds for an approved milestone.
-     *
-     * MANDATE 2 FIX — Bypass Bug (fund release side):
-     *   Strict require on status == Approved. Combined with the block in
-     *   withdrawCampaignFunds() this closes all bypass paths.
-     *
-     * WATERFALL ACCOUNTING:
-     *   All contributions live in this contract's balance (raisedAmount).
-     *   Each approved milestone releases its targetAmount share.
-     *   raisedAmount is decremented to track remaining escrowed funds.
-     */
     function withdrawMilestoneFunds(
         uint256 _cId,
         uint256 _mId
@@ -702,12 +684,10 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         Milestone storage m = milestones[_cId][_mId];
         require(!m.fundsReleased, "Already released");
 
-        // ── MANDATE 2 FIX: strict approval gate ───────────────────────────
         require(
             m.status == MilestoneStatus.Approved,
             "Milestone not approved by Oracle or DAO - cannot withdraw"
         );
-        // ───────────────────────────────────────────────────────────────────
 
         Campaign storage c = campaigns[_cId];
         uint256 amount = m.targetAmount;
@@ -715,13 +695,12 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
 
         m.fundsReleased = true;
         m.status = MilestoneStatus.Released;
-        c.raisedAmount -= amount; // track remaining escrow
+        c.raisedAmount -= amount;
 
         payable(c.creator).transfer(amount);
         emit MilestoneReleased(_cId, _mId, amount);
     }
 
-    /// @notice Contributor claims a refund when a milestone is rejected.
     function claimMilestoneRefund(
         uint256 _cId,
         uint256 _mId
@@ -733,20 +712,15 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
             "Not refundable"
         );
 
-        // Under waterfall, per-milestone contribution ledger may be 0.
-        // Campaign-level contributions mapping is the authoritative source for
-        // proportional refund calculation.
         uint256 contributed = contributions[_cId][msg.sender];
         require(contributed > 0, "Nothing to refund");
 
-        // Proportional refund: contributor's share of milestone targetAmount
         uint256 totalStake = campaigns[_cId].targetAmount;
         uint256 refundAmt = totalStake > 0
             ? (contributed * m.targetAmount) / totalStake
             : 0;
         require(refundAmt > 0, "Refund too small");
 
-        // Zero out to prevent double-claim
         contributions[_cId][msg.sender] = 0;
         if (m.status == MilestoneStatus.Rejected)
             m.status = MilestoneStatus.Refunded;
@@ -761,20 +735,6 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // Internal helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * @dev MANDATE 2 FIX — Proper quorum guard.
-     *
-     * Old logic: used m.raisedAmount (always 0 under waterfall) as quorum base
-     *   → quorum was trivially "met" from the very first vote
-     *   → one early Approve vote auto-resolved the milestone to Approved
-     *   → status changed away from Submitted
-     *   → every subsequent backer hit "Voting not open" revert
-     *   → frontend hid voting buttons for all backers (global lockout)
-     *
-     * New logic: quorum base = campaigns[_cId].raisedAmount (actual total stake).
-     *   Auto-resolution only fires when (totalVotes / totalStake) >= votingQuorumBps
-     *   AND the vote tally is already conclusive.
-     */
     function _tryResolveByVote(uint256 _cId, uint256 _mId) internal {
         Milestone storage m = milestones[_cId][_mId];
         uint256 totalVotes = m.totalVotesFor + m.totalVotesAgainst;
@@ -783,7 +743,6 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         uint256 totalStake = campaigns[_cId].raisedAmount;
         if (totalStake == 0) return;
 
-        // Only auto-resolve when quorum is reached
         bool quorumMet = totalVotes * 10000 >= totalStake * votingQuorumBps;
         if (!quorumMet) return;
 
@@ -807,7 +766,7 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
 
         if (approved) {
             m.status = MilestoneStatus.Approved;
-            emit MilestoneApproved(_cId, _mId, address(0)); // address(0) = DAO path
+            emit MilestoneApproved(_cId, _mId, address(0));
         } else {
             m.status = MilestoneStatus.Rejected;
             emit MilestoneRejected(_cId, _mId, address(0));

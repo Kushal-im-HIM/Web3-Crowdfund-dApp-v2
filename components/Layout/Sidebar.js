@@ -1,15 +1,16 @@
 /**
  * components/Layout/Sidebar.js
  *
- * NETWORK SYNC FIX:
- *   Previously compared `address` against `ADMIN_ADDRESS` from constants — a
- *   value frozen at boot time for whichever network NEXT_PUBLIC_NETWORK pointed
- *   to. If the app booted on Hardhat but you switched to Sepolia (or vice versa),
- *   the admin address comparison was against the wrong network's address, so the
- *   Admin Panel link vanished even for the real admin account.
+ * NETWORK SYNC FIX (unchanged):
+ *   adminAddress now comes from useNetworkContracts() for live chain accuracy.
  *
- *   Fix: adminAddress now comes from useNetworkContracts() which resolves the
- *   correct admin address for the LIVE connected chain in real time.
+ * MANDATE 5 — Light Mode Cream Aesthetic:
+ *   - Sidebar background: bg-[#fdfaf6] (cream-100) in light mode instead of
+ *     stark bg-white.
+ *   - Border: border-stone-200 (warm sand) instead of border-gray-200.
+ *   - Active nav item background: uses emerald-50/warm tint in light mode.
+ *   - Hover states: bg-stone-100 instead of bg-gray-50.
+ *   - All dark: classes are completely unchanged.
  */
 
 import { useState, useEffect } from "react";
@@ -49,7 +50,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
     } else {
       setIsAdmin(false);
     }
-  }, [address, ADMIN_ADDRESS]); // re-run whenever address OR chain changes
+  }, [address, ADMIN_ADDRESS]);
 
   const filteredItems = SIDEBAR_ITEMS.filter(
     (item) => !item.adminOnly || (item.adminOnly && isAdmin)
@@ -65,12 +66,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — MANDATE 5: cream bg in light mode */}
       <div
         className={`
           fixed top-0 left-0 h-full flex flex-col
-          bg-white dark:bg-primary-900
-          border-r border-gray-200 dark:border-primary-700
+          bg-[#fdfaf6] dark:bg-primary-900
+          border-r border-stone-200 dark:border-primary-700
           z-50 transition-all duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
           ${isCollapsed ? "w-16" : "w-64"}
@@ -78,7 +79,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-primary-700 shrink-0">
+        <div className="flex items-center justify-between p-4 border-b border-stone-200 dark:border-primary-700 shrink-0">
           {!isCollapsed && (
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-emerald-glow">
@@ -93,7 +94,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
 
           <button
             onClick={onToggleCollapse}
-            className="hidden md:flex p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-primary-800 transition-colors"
+            className="hidden md:flex p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-primary-800 transition-colors"
           >
             <FiChevronLeft
               className={`w-4 h-4 text-gray-500 transition-transform ${isCollapsed ? "rotate-180" : ""}`}
@@ -102,7 +103,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
 
           <button
             onClick={onToggle}
-            className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-primary-800 transition-colors"
+            className="md:hidden p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-primary-800 transition-colors"
           >
             <FiX className="w-5 h-5 text-gray-500" />
           </button>
@@ -111,7 +112,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
         {/* Middle Section */}
         <div className="flex-1 overflow-y-auto flex flex-col">
           {/* Navigation */}
-          <nav className="p-4 space-y-2 shrink-0">
+          <nav className="p-4 space-y-1.5 shrink-0">
             {filteredItems.map((item) => {
               const Icon = iconMap[item.icon];
               const isActive = router.pathname === item.path;
@@ -123,8 +124,10 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
                   className={`
                     flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200
                     ${isActive
-                      ? "bg-secondary-50 dark:bg-secondary-900/20 text-secondary-600 dark:text-secondary-400 border-r-2 border-secondary-600"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-primary-800"
+                      /* MANDATE 5: Soft emerald-50 in light mode for active item */
+                      ? "bg-emerald-50 dark:bg-secondary-900/20 text-secondary-700 dark:text-secondary-400 border-r-2 border-secondary-600"
+                      /* MANDATE 5: Warm stone hover instead of gray-50 */
+                      : "text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-primary-800"
                     }
                     ${isCollapsed ? "justify-center" : ""}
                   `}
@@ -145,12 +148,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
           {/* Connection Status */}
           {!isCollapsed && (
             <div className="px-4 pb-4 shrink-0">
-              <div className="pt-4 border-t border-gray-200 dark:border-primary-700">
+              {/* MANDATE 5: warm sand divider */}
+              <div className="pt-4 border-t border-stone-200 dark:border-primary-700">
                 <div
                   className={`
                     flex items-center space-x-2 px-3 py-2 rounded-lg
                     ${isConnected
-                      ? "bg-secondary-50 dark:bg-secondary-900/20 text-secondary-700 dark:text-secondary-400"
+                      ? "bg-emerald-50 dark:bg-secondary-900/20 text-secondary-700 dark:text-secondary-400"
                       : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"
                     }
                   `}

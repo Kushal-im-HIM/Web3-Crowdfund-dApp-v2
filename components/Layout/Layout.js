@@ -1,3 +1,13 @@
+/**
+ * components/Layout/Layout.js
+ *
+ * MANDATE 5 — Light Mode Aesthetic:
+ *   Root layout background updated from bg-stone-50 to bg-cream-200 (which
+ *   maps to #f7f3ed — the warm cream defined in tailwind.config.js).
+ *   This ensures the main content area matches the cream palette cohesively.
+ *   dark:bg-primary-900 is unchanged — dark mode is untouched.
+ */
+
 import { useState } from "react";
 import { Toaster } from "react-hot-toast";
 import Sidebar from "./Sidebar";
@@ -11,9 +21,9 @@ export default function Layout({ children }) {
   const toggleSidebarCollapse = () => setSidebarCollapsed(!sidebarCollapsed);
 
   return (
-    // ISSUE 2c FIX: bg-stone-50 (warm #FAFAF9) in light mode instead of stark primary-50.
-    // dark:bg-primary-900 preserves the original dark mode background exactly.
-    <div className="min-h-screen bg-stone-50 dark:bg-primary-900">
+    // MANDATE 5: Warm cream background in light mode instead of stark white.
+    // bg-[#f7f3ed] = cream-200 from our new palette. dark mode unchanged.
+    <div className="min-h-screen bg-[#f7f3ed] dark:bg-primary-900 transition-colors duration-300">
       <Sidebar
         isOpen={sidebarOpen}
         onToggle={toggleSidebar}
@@ -43,7 +53,7 @@ export default function Layout({ children }) {
           success: {
             duration: 3000,
             theme: {
-              primary: "#4aed88",
+              primary: "#10b981",
             },
           },
         }}

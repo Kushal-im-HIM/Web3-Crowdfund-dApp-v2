@@ -1,3 +1,15 @@
+/**
+ * components/Campaign/CampaignDetails.js
+ *
+ * MANDATE 1 — Zombie Campaign UX Fix (Details Page):
+ *   - isFunded computed from raisedAmount >= targetAmount.
+ *   - Contribute input section is hidden when campaign is fully funded.
+ *   - "Funding Closed" disabled button shown to non-creator users when funded.
+ *   - "✓ Successfully Funded" emerald glowing badge in the hero image overlay.
+ *   - Progress bar locked at 100% solid green with glow when funded.
+ *   - The "FUNDED" chip in the hero header is kept and enhanced.
+ */
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAccount, useContractRead } from "wagmi";
@@ -6,7 +18,7 @@ import { toast } from "react-hot-toast";
 import {
   FiUser, FiClock, FiTarget, FiShare2,
   FiHeart, FiUsers, FiCalendar, FiFlag,
-  FiPlusCircle,
+  FiPlusCircle, FiCheckCircle, FiLock,
 } from "react-icons/fi";
 import { useContract } from "../../hooks/useContract";
 import { getFromIPFS } from "../../utils/ipfs";
@@ -14,7 +26,6 @@ import {
   formatEther, formatAddress, calculateTimeLeft,
   calculateProgress, formatDate, copyToClipboard,
 } from "../../utils/helpers";
-// ERROR 2 FIX: replaced static import with live hook — see useNetworkContracts
 import { useNetworkContracts } from "../../hooks/useNetworkContracts";
 import { CROWDFUNDING_ABI } from "../../constants/abi";
 import MilestonePanel from "../Milestone/MilestonePanel";
@@ -28,7 +39,6 @@ export default function CampaignDetails({ campaignId }) {
     useWithdrawFunds, useGetRefund, useContribution, useIsCampaignRegistered,
   } = useContract();
 
-  // ERROR 2 FIX: live contract address — updates when MetaMask switches chains
   const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
 
   const [metadata, setMetadata] = useState(null);
@@ -42,7 +52,6 @@ export default function CampaignDetails({ campaignId }) {
   const { withdrawFunds, isLoading: withdrawing } = useWithdrawFunds();
   const { getRefund, isLoading: refunding } = useGetRefund();
 
-  // Check if this campaign has milestone system enabled
   const { data: isMilestoneRegistered, refetch: refetchRegistered } =
     useIsCampaignRegistered(campaignId);
 
@@ -91,11 +100,14 @@ export default function CampaignDetails({ campaignId }) {
   const raisedAmount = formatEther(campaign.raisedAmount);
   const targetAmount = formatEther(campaign.targetAmount);
   const isCreator = address?.toLowerCase() === campaign.creator?.toLowerCase();
-  const isSuccessful = parseFloat(raisedAmount) >= parseFloat(targetAmount);
-  // HYBRID WITHDRAWAL FIX: canWithdraw no longer requires timeLeft.expired.
-  // The contract's withdrawCampaignFunds() no longer has the campaignEnded modifier,
-  // so once raisedAmount >= targetAmount the creator may withdraw immediately.
-  // getRefund() is unaffected — it still requires deadline passed + target unmet.
+
+  // MANDATE 1: Computed funded state — on-chain source of truth
+  const isFunded =
+    campaign.raisedAmount !== undefined &&
+    campaign.targetAmount !== undefined &&
+    BigInt(campaign.raisedAmount.toString()) >= BigInt(campaign.targetAmount.toString());
+
+  const isSuccessful = isFunded; // alias kept for withdraw logic
   const canWithdraw = isCreator && isSuccessful && !campaign.withdrawn;
   const canGetRefund = !isCreator && timeLeft.expired && !isSuccessful && userContribution > 0;
 
@@ -123,18 +135,18 @@ export default function CampaignDetails({ campaignId }) {
       return toast.error("Please enter a valid contribution amount");
     }
 
-    // FIX (Issue #1): Guard against over-funding at the UI layer too.
-    // Even though the contract now enforces a cap and refunds excess, we should warn
-    // the user and auto-correct the value so they don't pay unnecessary gas for a tx
-    // where most of their ETH would be immediately refunded.
+    // MANDATE 1: UI-layer hard-cap guard
+    if (isFunded) {
+      return toast.error("This campaign has already reached its funding target.");
+    }
+
     const remainingEth = parseFloat(targetAmount) - parseFloat(raisedAmount);
     if (remainingEth <= 0) {
       return toast.error("This campaign has already reached its funding target.");
     }
     let finalAmount = parseFloat(contributionAmount);
     if (finalAmount > remainingEth) {
-      // Auto-cap and inform the user rather than silently over-sending.
-      toast("Your amount was adjusted to the remaining allowance: " + remainingEth.toFixed(6) + " ETH", { icon: "ℹ️" });
+      toast(`Your amount was adjusted to the remaining allowance: ${remainingEth.toFixed(6)} ETH`, { icon: "ℹ️" });
       finalAmount = remainingEth;
       setContributionAmount(remainingEth.toFixed(6));
     }
@@ -154,7 +166,7 @@ export default function CampaignDetails({ campaignId }) {
     <div className="max-w-6xl mx-auto space-y-6 pb-16">
 
       {/* ── Campaign Hero Card ─────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-primary-700">
+      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg overflow-hidden border border-stone-100 dark:border-primary-700">
 
         {/* Image */}
         <div className="relative h-64 md:h-80 bg-gradient-emerald">
@@ -162,13 +174,26 @@ export default function CampaignDetails({ campaignId }) {
             ? <img src={metadata.image} alt={campaign.title} className="w-full h-full object-cover" />
             : <div className="w-full h-full flex items-center justify-center text-white text-8xl font-bold opacity-20">{campaign.title?.charAt(0) || "C"}</div>
           }
+
+          {/* MANDATE 1: Funded overlay badge — prominent glowing emerald */}
+          {isFunded && (
+            <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/20 to-emerald-900/40 flex items-end justify-start p-6">
+              <div className="flex items-center gap-2 bg-emerald-500 px-5 py-2.5 rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.7)] animate-pulse-slow">
+                <FiCheckCircle className="w-5 h-5 text-white" />
+                <span className="text-white font-bold text-base">✓ Successfully Funded</span>
+              </div>
+            </div>
+          )}
+
           <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
             <div className="flex gap-2">
               <span className={`px-3 py-1 text-xs font-bold rounded-full backdrop-blur-sm ${campaign.active ? "bg-secondary-500/80 text-white" : "bg-red-500/80 text-white"}`}>
                 {campaign.active ? "ACTIVE" : "INACTIVE"}
               </span>
-              {isSuccessful && (
-                <span className="px-3 py-1 text-xs font-bold bg-accent-500/80 text-white rounded-full backdrop-blur-sm">FUNDED</span>
+              {isFunded && (
+                <span className="px-3 py-1 text-xs font-bold bg-emerald-500/90 text-white rounded-full backdrop-blur-sm shadow-[0_0_10px_rgba(16,185,129,0.5)]">
+                  FUNDED
+                </span>
               )}
             </div>
             <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/30 transition-all">
@@ -188,7 +213,7 @@ export default function CampaignDetails({ campaignId }) {
                 <p className="text-gray-600 dark:text-gray-400 text-base leading-relaxed">{campaign.description}</p>
               </div>
 
-              <div className="flex items-center gap-4 p-4 bg-primary-50 dark:bg-primary-700/60 rounded-lg border border-gray-200 dark:border-primary-600">
+              <div className="flex items-center gap-4 p-4 bg-stone-50 dark:bg-primary-700/60 rounded-lg border border-stone-200 dark:border-primary-600">
                 <div className="w-10 h-10 bg-secondary-500/20 dark:bg-secondary-500/10 rounded-full flex items-center justify-center border border-secondary-500/30">
                   <FiUser className="w-5 h-5 text-secondary-600 dark:text-secondary-400" />
                 </div>
@@ -204,18 +229,29 @@ export default function CampaignDetails({ campaignId }) {
 
             {/* Right — Stats & Actions */}
             <div className="lg:w-80 mt-6 lg:mt-0">
-              <div className="bg-primary-50 dark:bg-primary-700/50 rounded-xl p-6 border border-gray-200 dark:border-primary-600 space-y-5">
+              <div className="bg-stone-50 dark:bg-primary-700/50 rounded-xl p-6 border border-stone-200 dark:border-primary-600 space-y-5">
 
-                {/* Progress bar */}
+                {/* MANDATE 1: Progress bar — solid green when funded */}
                 <div>
                   <div className="flex justify-between text-sm mb-1.5">
                     <span className="font-medium text-gray-700 dark:text-gray-300">Progress</span>
-                    <span className="font-bold text-gray-900 dark:text-white">{progress.toFixed(1)}%</span>
+                    <span className={`font-bold ${isFunded ? "text-emerald-600 dark:text-emerald-400" : "text-gray-900 dark:text-white"}`}>
+                      {isFunded ? "100%" : `${progress.toFixed(1)}%`}
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
-                    <div className="bg-gradient-emerald h-2.5 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(progress, 100)}%` }} />
+                    {isFunded ? (
+                      <div className="bg-emerald-500 h-2.5 rounded-full w-full shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                    ) : (
+                      <div className="bg-gradient-emerald h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(progress, 100)}%` }} />
+                    )}
                   </div>
+                  {isFunded && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1">
+                      <FiCheckCircle className="w-3 h-3" /> Funding target reached
+                    </p>
+                  )}
                 </div>
 
                 {/* Stats */}
@@ -226,17 +262,16 @@ export default function CampaignDetails({ campaignId }) {
                     { val: uniqueContributors.length, label: "Backers" },
                     { val: timeLeft.expired ? "Ended" : timeLeft.text?.split(" ")[0] ?? "—", label: timeLeft.expired ? "" : "Days Left" },
                   ].map(({ val, label }, i) => (
-                    <div key={i} className="bg-white dark:bg-primary-800 rounded-lg p-3 border border-gray-200 dark:border-primary-600 text-center">
-                      <p className="text-xl font-bold text-gray-900 dark:text-white">{val}</p>
+                    <div key={i} className="bg-white dark:bg-primary-800 rounded-lg p-3 border border-stone-200 dark:border-primary-600 text-center">
+                      <p className={`text-xl font-bold ${i === 0 && isFunded ? "text-emerald-600 dark:text-emerald-400" : "text-gray-900 dark:text-white"}`}>{val}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
                     </div>
                   ))}
                 </div>
 
-                {/* Contribute input */}
-                {!timeLeft.expired && campaign.active && !isCreator && isConnected && (
+                {/* MANDATE 1: Contribute input — hidden when funded */}
+                {!isFunded && !timeLeft.expired && campaign.active && !isCreator && isConnected && (
                   <div className="space-y-2">
-                    {/* FIX (Issue #1): Show remaining allowance so users know the cap */}
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Remaining:{" "}
                       <span className="font-semibold text-gray-700 dark:text-gray-300">
@@ -244,7 +279,6 @@ export default function CampaignDetails({ campaignId }) {
                       </span>
                     </p>
 
-                    {/* FIX (Issue #1): max attribute prevents browser from accepting more than allowed. */}
                     <input
                       type="number"
                       step="0.01"
@@ -253,7 +287,7 @@ export default function CampaignDetails({ campaignId }) {
                       placeholder="0.00 ETH"
                       value={contributionAmount}
                       onChange={(e) => setContributionAmount(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg text-sm bg-white dark:bg-primary-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-secondary-500 outline-none"
+                      className="w-full px-4 py-3 border border-stone-300 dark:border-primary-600 rounded-lg text-sm bg-white dark:bg-primary-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-secondary-500 outline-none"
                     />
 
                     <button
@@ -264,6 +298,17 @@ export default function CampaignDetails({ campaignId }) {
                       {contributing ? "Processing..." : "Contribute Now"}
                     </button>
                   </div>
+                )}
+
+                {/* MANDATE 1: Funding Closed button — shown to non-creator when funded */}
+                {isFunded && !isCreator && isConnected && (
+                  <button
+                    disabled
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-semibold py-3 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 cursor-not-allowed"
+                  >
+                    <FiLock className="w-4 h-4" />
+                    Funding Closed
+                  </button>
                 )}
 
                 {canWithdraw && (
@@ -281,8 +326,8 @@ export default function CampaignDetails({ campaignId }) {
                 )}
 
                 {!isConnected && (
-                  <div className="text-center p-3 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800 rounded-lg">
-                    <p className="text-accent-800 dark:text-accent-300 text-sm">Connect wallet to contribute</p>
+                  <div className="text-center p-3 bg-amber-50 dark:bg-accent-900/20 border border-amber-200 dark:border-accent-800 rounded-lg">
+                    <p className="text-amber-800 dark:text-accent-300 text-sm">Connect wallet to contribute</p>
                   </div>
                 )}
 
@@ -300,14 +345,13 @@ export default function CampaignDetails({ campaignId }) {
       </div>
 
       {/* ── Milestones Section ─────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-gray-200 dark:border-primary-700 p-6 md:p-8">
+      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-stone-100 dark:border-primary-700 p-6 md:p-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <FiFlag className="w-5 h-5 text-tertiary-500" />
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Project Milestones</h2>
           </div>
 
-          {/* Creator: show setup button if milestones not yet enabled */}
           {isCreator && !isMilestoneRegistered && !showMilestoneSetup && (
             <button
               onClick={() => setShowMilestoneSetup(true)}
@@ -319,13 +363,9 @@ export default function CampaignDetails({ campaignId }) {
           )}
         </div>
 
-        {/* Creator setup form — inline on this page */}
         {isCreator && showMilestoneSetup && (
           <MilestoneCreationForm
             campaignId={campaignId}
-            // FIX (Issue #7): campaignTarget was not passed, so MilestoneCreationForm
-            // could not call the updated registerCampaign(id, target) nor validate
-            // that milestone sums stay within the campaign goal.
             campaignTarget={targetAmount}
             onDone={() => {
               setShowMilestoneSetup(false);
@@ -334,12 +374,6 @@ export default function CampaignDetails({ campaignId }) {
           />
         )}
 
-        {/* Milestone list (or empty state) */}
-        {/*
-          ISSUE 1 FIX: Pass `campaign.raisedAmount` as the single source of truth.
-          MilestonePanel feeds this into `useWaterfallMilestones` so each milestone
-          fills visually based on total campaign funds, not direct milestone deposits.
-        */}
         {!showMilestoneSetup && (
           <MilestonePanel
             campaignId={campaignId}
@@ -348,7 +382,6 @@ export default function CampaignDetails({ campaignId }) {
           />
         )}
 
-        {/* Non-creator empty hint */}
         {!isCreator && !isMilestoneRegistered && (
           <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
             The creator has not set up milestones for this campaign yet.
@@ -357,8 +390,8 @@ export default function CampaignDetails({ campaignId }) {
       </div>
 
       {/* ── Tabs Section ──────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-gray-200 dark:border-primary-700 p-6 md:p-8">
-        <div className="border-b border-gray-200 dark:border-primary-700 mb-6">
+      <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-stone-100 dark:border-primary-700 p-6 md:p-8">
+        <div className="border-b border-stone-200 dark:border-primary-700 mb-6">
           <nav className="flex gap-8">
             {["overview", "contributors"].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
@@ -418,7 +451,7 @@ export default function CampaignDetails({ campaignId }) {
             {metadata?.additionalInfo && (
               <div className="space-y-3">
                 <h3 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Additional Information</h3>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm border-l-4 border-gray-200 dark:border-gray-600 pl-4">
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm border-l-4 border-stone-200 dark:border-gray-600 pl-4">
                   {metadata.additionalInfo}
                 </p>
               </div>
@@ -437,7 +470,7 @@ export default function CampaignDetails({ campaignId }) {
               <div className="space-y-3">
                 {uniqueContributors.map((c, i) => (
                   <div key={c.address}
-                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-primary-900/50 border border-gray-100 dark:border-primary-700 rounded-lg hover:bg-gray-100 dark:hover:bg-primary-700/50 transition-colors">
+                    className="flex items-center justify-between p-4 bg-stone-50 dark:bg-primary-900/50 border border-stone-100 dark:border-primary-700 rounded-lg hover:bg-stone-100 dark:hover:bg-primary-700/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 bg-gradient-emerald rounded-full flex items-center justify-center text-white text-xs font-bold">
                         #{i + 1}

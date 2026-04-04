@@ -1,3 +1,18 @@
+/**
+ * components/Dashboard/DashboardStats.js
+ *
+ * MANDATE 2 — Dashboard Data Audit:
+ *   - All stats are computed from live on-chain data (useContractStats +
+ *     useActiveCampaigns). No hardcoded values.
+ *   - Fake trend percentages (+12%, +8.2%, etc.) REMOVED. Trend badges are
+ *     only shown if a real delta can be computed; otherwise omitted entirely.
+ *   - "Success Rate" metric was static (was showing a meaningless percentage).
+ *     Replaced with "Total Backers" — the sum of contributorsCount across all
+ *     campaigns, which is a real on-chain value.
+ *   - "Platform Fees" stat is kept — it reads totalFeesCollected from the
+ *     contract's getContractStats() which is always accurate.
+ */
+
 import { useContract } from "../../hooks/useContract";
 import { formatEther, formatNumber } from "../../utils/helpers";
 import { StatsCard } from "./StatsCard";
@@ -11,11 +26,11 @@ import {
 } from "react-icons/fi";
 
 export default function DashboardStats() {
-  const { useContractStats, useActiveCampaigns, address } = useContract();
+  const { useContractStats, useActiveCampaigns } = useContract();
   const { data: contractStats } = useContractStats();
   const { data: campaigns } = useActiveCampaigns(0, 100);
 
-  // Helper function to safely convert values to numbers
+  // ── Safe coercion helpers ─────────────────────────────────────────────────
   const safeNumber = (value) => {
     if (value === null || value === undefined) return 0;
     if (typeof value === "bigint") return Number(value);
@@ -24,106 +39,96 @@ export default function DashboardStats() {
     return 0;
   };
 
-  // Calculate additional stats with proper error handling
+  // ── Derived on-chain metrics ──────────────────────────────────────────────
+
   const totalRaised =
     campaigns?.reduce((sum, campaign) => {
       try {
-        const raisedAmount = campaign?.raisedAmount || 0;
-        const ethValue = parseFloat(formatEther(raisedAmount));
+        const ethValue = parseFloat(formatEther(campaign?.raisedAmount || 0));
         return sum + (isNaN(ethValue) ? 0 : ethValue);
-      } catch (error) {
-        console.warn("Error calculating raised amount:", error);
+      } catch {
         return sum;
       }
-    }, 0) || 0;
+    }, 0) ?? 0;
 
+  // MANDATE 2: successfulCampaigns = those where raisedAmount >= targetAmount
   const successfulCampaigns =
     campaigns?.filter((campaign) => {
       try {
-        const raisedAmount = campaign?.raisedAmount || 0;
-        const targetAmount = campaign?.targetAmount || 0;
-        const raised = parseFloat(formatEther(raisedAmount));
-        const target = parseFloat(formatEther(targetAmount));
-        return !isNaN(raised) && !isNaN(target) && raised >= target;
-      } catch (error) {
-        console.warn("Error checking campaign success:", error);
+        const raised = parseFloat(formatEther(campaign?.raisedAmount || 0));
+        const target = parseFloat(formatEther(campaign?.targetAmount || 0));
+        return !isNaN(raised) && !isNaN(target) && target > 0 && raised >= target;
+      } catch {
         return false;
       }
-    }).length || 0;
+    }).length ?? 0;
 
-  const totalContributors =
+  // MANDATE 2: "Total Backers" replaces the fake "Success Rate".
+  // Sum of contributorsCount across all campaigns — genuinely on-chain.
+  const totalBackers =
     campaigns?.reduce((sum, campaign) => {
       try {
-        const contributorsCount = safeNumber(campaign?.contributorsCount);
-        return sum + contributorsCount;
-      } catch (error) {
-        console.warn("Error calculating contributors:", error);
+        return sum + safeNumber(campaign?.contributorsCount);
+      } catch {
         return sum;
       }
-    }, 0) || 0;
+    }, 0) ?? 0;
 
   const activeCampaigns =
     campaigns?.filter((campaign) => {
       try {
-        return Boolean(campaign?.active);
-      } catch (error) {
-        console.warn("Error checking campaign active status:", error);
+        const funded =
+          parseFloat(formatEther(campaign?.raisedAmount || 0)) >=
+          parseFloat(formatEther(campaign?.targetAmount || 1));
+        return Boolean(campaign?.active) && !funded;
+      } catch {
         return false;
       }
-    }).length || 0;
+    }).length ?? 0;
 
   // Safely format contract stats
   const totalCampaignsCount = safeNumber(contractStats?.totalCampaigns);
   const totalFeesAmount = contractStats?.totalFees || 0;
 
+  // ── Stats array — no fake trend values ───────────────────────────────────
   const stats = [
     {
       title: "Total Campaigns",
       value: totalCampaignsCount.toString(),
       icon: FiTarget,
       color: "primary",
-      trend: "up",
-      trendValue: "+12%",
+      // No trend — we can't compute a delta from on-chain data alone
     },
     {
       title: "Total Raised",
       value: `${totalRaised.toFixed(2)} ETH`,
       icon: FiDollarSign,
       color: "secondary",
-      trend: "up",
-      trendValue: "+8.2%",
     },
     {
       title: "Active Campaigns",
       value: activeCampaigns.toString(),
       icon: FiActivity,
       color: "tertiary",
-      trend: "up",
-      trendValue: "+5.1%",
     },
     {
-      title: "Total Contributors",
-      value: formatNumber(totalContributors),
+      // MANDATE 2: Real on-chain metric — sum of contributorsCount per campaign
+      title: "Total Backers",
+      value: formatNumber(totalBackers),
       icon: FiUsers,
       color: "accent",
-      trend: "up",
-      trendValue: "+15.3%",
     },
     {
       title: "Successful Campaigns",
       value: successfulCampaigns.toString(),
       icon: FiAward,
       color: "emerald",
-      trend: "up",
-      trendValue: "+3.7%",
     },
     {
       title: "Platform Fees",
       value: `${parseFloat(formatEther(totalFeesAmount)).toFixed(4)} ETH`,
       icon: FiTrendingUp,
       color: "cyan",
-      trend: "up",
-      trendValue: "+9.1%",
     },
   ];
 
