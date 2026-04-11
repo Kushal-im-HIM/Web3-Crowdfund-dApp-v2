@@ -629,13 +629,33 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         bool _inFavour
     ) external validMilestone(_cId, _mId) {
         Milestone storage m = milestones[_cId][_mId];
-        require(m.status == MilestoneStatus.Submitted, "Voting not open");
+
+        // Clear revert reason when the milestone has already been resolved.
+        // This surfaces as a readable string in MetaMask / viem instead of a
+        // generic execution-reverted error.
+        require(
+            m.status == MilestoneStatus.Submitted,
+            m.status == MilestoneStatus.Approved
+                ? "Milestone already approved - result is final"
+                : m.status == MilestoneStatus.Rejected
+                    ? "Milestone already rejected - claim your refund"
+                    : m.status == MilestoneStatus.Pending
+                        ? "Evidence not yet submitted - voting not started"
+                        : "Voting not open"
+        );
+
+        // Reject votes after the DAO voting window has expired.
+        // Once the window closes, anyone should call finalizeVoting() instead.
+        require(
+            block.timestamp < m.deadline + votingWindowSeconds,
+            "Voting window has closed - call finalizeVoting() to settle"
+        );
 
         Vote storage v = votes[_cId][_mId][msg.sender];
-        require(!v.hasVoted, "Already voted");
+        require(!v.hasVoted, "You have already voted on this milestone");
 
         uint256 weight = contributions[_cId][msg.sender];
-        require(weight > 0, "No contribution to vote with");
+        require(weight > 0, "Only contributors can vote");
 
         v.hasVoted = true;
         v.inFavour = _inFavour;
@@ -735,6 +755,29 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // Internal helpers
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * @dev Called after each vote. Only auto-resolves when the result is
+     *      FULLY DETERMINED — i.e., every single wei of campaign stake has
+     *      been cast. This guarantees that no contributor is ever locked out
+     *      before they have had a chance to vote.
+     *
+     *      For all partial-participation scenarios (the common case), the
+     *      milestone stays in Submitted state until:
+     *        (a) the oracle acts, or
+     *        (b) the votingWindow expires and anyone calls finalizeVoting().
+     *
+     *      finalizeVoting() is the intended resolution path for DAO votes.
+     *      _tryResolveByVote() is only a convenience shortcut for the rare
+     *      case where participation is 100%.
+     *
+     * Why not mid-vote auto-resolution?
+     *   With 4 donors (0.4, 0.2, 0.2, 0.2 ETH) any resolution order locked
+     *   out at least one donor before they could vote:
+     *     • 0.4 ETH voted first  → quorum hit (40% > 30%), resolved immediately
+     *     • 3×0.2 voted first    → 0.6 ETH > approvalLine (0.51 ETH), resolved
+     *   Both are mathematically "correct" but terrible UX. Removing mid-vote
+     *   resolution entirely is the only safe approach for small donor groups.
+     */
     function _tryResolveByVote(uint256 _cId, uint256 _mId) internal {
         Milestone storage m = milestones[_cId][_mId];
         uint256 totalVotes = m.totalVotesFor + m.totalVotesAgainst;
@@ -743,17 +786,13 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         uint256 totalStake = campaigns[_cId].raisedAmount;
         if (totalStake == 0) return;
 
-        bool quorumMet = totalVotes * 10000 >= totalStake * votingQuorumBps;
-        if (!quorumMet) return;
+        // Only auto-resolve when EVERY contributor has voted (100 % participation).
+        // In practice this means the result is now fully determined and waiting
+        // for the window to expire serves no purpose.
+        // For partial participation, wait for finalizeVoting() after window expiry.
+        if (totalVotes < totalStake) return;
 
-        bool approvalReached = m.totalVotesFor * 10000 >=
-            totalVotes * approvalThresholdBps;
-        bool rejectionCertain = m.totalVotesAgainst * 10000 >
-            totalVotes * (10000 - approvalThresholdBps);
-
-        if (approvalReached || rejectionCertain) {
-            _resolveByVote(_cId, _mId);
-        }
+        _resolveByVote(_cId, _mId);
     }
 
     function _resolveByVote(uint256 _cId, uint256 _mId) internal {

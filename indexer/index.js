@@ -1,9 +1,23 @@
 // indexer/index.js
-// Lightweight in-process indexer — no external DB required for development.
-// Materializes Milestone events into an in-memory store and exposes a tiny
-// Express REST API that the frontend polls.
 //
-// For production swap the in-memory store for SQLite/PostgreSQL.
+// FIX Issue 4 — Ghost Campaign Counter:
+//   The contract has NO on-chain event for deactivation (deactivateCampaign()
+//   sets campaigns[id].active = false but emits nothing). Therefore the only
+//   way for the indexer to learn about deactivations is to POLL the contract.
+//
+//   Changes in this file:
+//     1. store.campaigns[id].active is now tracked (defaults true on first seen).
+//     2. A periodic sync task (every 60 s, configurable via SYNC_INTERVAL_MS)
+//        queries getCampaign() for every known campaign ID and updates
+//        store.campaigns[id].active accordingly.
+//     3. GET /campaigns now returns ONLY entries where active !== false,
+//        matching what getActiveCampaigns() returns on the frontend.
+//     4. GET /campaigns/count returns the live count of non-deactivated campaigns
+//        (useful for dashboards that talk to the indexer instead of the chain).
+//     5. GET /campaigns/all returns every known campaign (including deactivated)
+//        with an `active` boolean — useful for the admin panel.
+//
+// All existing milestone endpoints are unchanged.
 //
 // Run:
 //   npm install ethers express dotenv
@@ -15,7 +29,15 @@ const express = require("express");
 
 // ─── ABI ────────────────────────────────────────────────────────────────────
 const ABI = [
-  "event CampaignRegistered(uint256 indexed campaignId, address indexed creator)",
+  // Campaign views — needed for active-status sync
+  "function campaignCounter() external view returns (uint256)",
+  "function getCampaign(uint256 id) external view returns (tuple(uint256 id, address creator, string title, string description, string metadataHash, uint256 targetAmount, uint256 raisedAmount, uint256 deadline, bool withdrawn, bool active, uint256 createdAt, uint256 contributorsCount))",
+
+  // Campaign events
+  "event CampaignCreated(uint256 indexed campaignId, address indexed creator, uint256 targetAmount, uint256 deadline, string metadataHash)",
+
+  // Milestone events
+  "event MilestonesEnabled(uint256 indexed campaignId, address indexed creator)",
   "event MilestoneCreated(uint256 indexed campaignId, uint256 indexed milestoneId, string title, uint256 targetAmount, uint256 deadline)",
   "event MilestoneFunded(uint256 indexed campaignId, uint256 indexed milestoneId, address indexed contributor, uint256 amount)",
   "event MilestoneSubmitted(uint256 indexed campaignId, uint256 indexed milestoneId, string evidenceIpfsHash, string evidenceUrl)",
@@ -23,21 +45,19 @@ const ABI = [
   "event MilestoneRejected(uint256 indexed campaignId, uint256 indexed milestoneId, address rejecter)",
   "event MilestoneReleased(uint256 indexed campaignId, uint256 indexed milestoneId, uint256 amount)",
   "event MilestoneVoted(uint256 indexed campaignId, uint256 indexed milestoneId, address indexed voter, bool inFavour, uint256 weight)",
-  "function getCampaignMilestones(uint256 campaignId) external view returns (tuple(uint256 id, uint256 campaignId, string title, string description, uint256 targetAmount, uint256 raisedAmount, uint256 deadline, uint8 status, string evidenceIpfsHash, string evidenceUrl, uint256 totalVotesFor, uint256 totalVotesAgainst, uint256 contributorsCount, bool fundsReleased)[])",
 ];
 
-const STATUS_NAMES = ["Pending", "Submitted", "Approved", "Rejected", "Released", "Refunded"];
-
 // ─── In-memory store ─────────────────────────────────────────────────────────
-// milestones[campaignId][milestoneId] = { ...fields, votes: [] }
 const store = {
-  milestones: {},    // campaignId -> milestoneId -> milestone object
-  campaigns: {},    // campaignId -> { creator, milestoneIds: [] }
+  milestones: {},  // campaignId -> milestoneId -> milestone object
+  campaigns: {},   // campaignId -> { creator, active, milestoneIds: [] }
 };
 
 function ensureCampaign(campaignId) {
   const id = campaignId.toString();
-  if (!store.campaigns[id]) store.campaigns[id] = { creator: null, milestoneIds: [] };
+  if (!store.campaigns[id]) {
+    store.campaigns[id] = { creator: null, active: true, milestoneIds: [] };
+  }
   return store.campaigns[id];
 }
 
@@ -62,10 +82,19 @@ function ensureMilestone(campaignId, milestoneId) {
 }
 
 // ─── Event handlers ──────────────────────────────────────────────────────────
-function onCampaignRegistered(campaignId, creator) {
+
+function onCampaignCreated(campaignId, creator) {
   const c = ensureCampaign(campaignId.toString());
   c.creator = creator;
-  console.log(`[idx] CampaignRegistered ${campaignId}`);
+  c.active = true; // newly created campaigns are always active
+  console.log(`[idx] CampaignCreated ${campaignId} by ${creator}`);
+}
+
+// Legacy: some deployments may still emit CampaignRegistered (MilestonesEnabled)
+function onMilestonesEnabled(campaignId, creator) {
+  const c = ensureCampaign(campaignId.toString());
+  c.creator = creator;
+  console.log(`[idx] MilestonesEnabled ${campaignId}`);
 }
 
 function onMilestoneCreated(campaignId, milestoneId, title, targetAmount, deadline) {
@@ -100,18 +129,11 @@ function onMilestoneApproved(campaignId, milestoneId, approver) {
   console.log(`[idx] MilestoneApproved ${campaignId}-${milestoneId}`);
 }
 
-// FIX (Issue #8): The MilestoneRejected event has three arguments:
-//   MilestoneRejected(uint256 campaignId, uint256 milestoneId, address rejecter)
-// The original handler only declared two parameters (campaignId, milestoneId), which means
-// the ethers event listener would pass `rejecter` as a third argument that was silently ignored.
-// While this doesn't corrupt the status update here, it is semantically wrong and prevents
-// storing the rejecter address for audit purposes.
-// Original: function onMilestoneRejected(campaignId, milestoneId) {
 function onMilestoneRejected(campaignId, milestoneId, rejecter) {
   const m = ensureMilestone(campaignId, milestoneId);
   m.status = "Rejected";
   m.statusCode = 3;
-  m.rejecter = rejecter; // FIX: store rejecter address (was silently dropped)
+  m.rejecter = rejecter;
   console.log(`[idx] MilestoneRejected ${campaignId}-${milestoneId} by ${rejecter}`);
 }
 
@@ -134,27 +156,69 @@ function onMilestoneVoted(campaignId, milestoneId, voter, inFavour, weight) {
   console.log(`[idx] MilestoneVoted ${campaignId}-${milestoneId} by ${voter} (${inFavour ? "FOR" : "AGAINST"})`);
 }
 
-// ─── Subscribe ───────────────────────────────────────────────────────────────
+// ─── FIX Issue 4: Active-status sync ─────────────────────────────────────────
+//
+// Because deactivateCampaign() in the contract emits NO event, the only
+// reliable way to detect deactivations is to poll getCampaign() periodically.
+//
+// This function fetches the `active` field for every campaign ID the indexer
+// knows about (union of: events seen + 1..campaignCounter) and updates the
+// local store. It runs once at startup (after catch-up) and then on a timer.
+//
+async function syncActiveCampaignStatuses(contract) {
+  try {
+    let maxId = 0;
+    try {
+      maxId = Number(await contract.campaignCounter());
+    } catch {
+      // fallback: use highest id we've already seen in the store
+      maxId = Math.max(0, ...Object.keys(store.campaigns).map(Number));
+    }
+
+    if (maxId === 0) return;
+
+    let deactivated = 0;
+    for (let id = 1; id <= maxId; id++) {
+      try {
+        const c = await contract.getCampaign(id);
+        const sid = id.toString();
+        if (!store.campaigns[sid]) {
+          store.campaigns[sid] = { creator: c.creator, active: c.active, milestoneIds: [] };
+        } else {
+          if (store.campaigns[sid].active !== c.active) {
+            console.log(`[idx] Campaign ${id} active changed: ${store.campaigns[sid].active} → ${c.active}`);
+          }
+          store.campaigns[sid].active = c.active;
+          store.campaigns[sid].creator = c.creator;
+        }
+        if (!c.active) deactivated++;
+      } catch (err) {
+        // getCampaign reverts for non-existent IDs — expected for gaps
+        console.warn(`[idx] Could not fetch campaign ${id}: ${err.message}`);
+      }
+    }
+    console.log(`[idx] Active-status sync done. ${maxId} campaigns, ${deactivated} deactivated.`);
+  } catch (err) {
+    console.error("[idx] Active-status sync error:", err.message);
+  }
+}
+
 // ─── Subscribe ───────────────────────────────────────────────────────────────
 async function startIndexer(contract) {
   console.log("[idx] Catching up historical events...");
   let startBlock = parseInt(process.env.START_BLOCK || "0", 10);
   const current = await contract.provider.getBlockNumber();
 
-  // Safety net: don't start from block 0 on Sepolia
   if (!startBlock || startBlock === 0) {
     startBlock = current - 5;
   }
 
-  // Updated catchUp function to use 10-block chunks for Alchemy Free Tier
   const catchUp = async (eventName, handler) => {
     console.log(`[idx] Catching up ${eventName}...`);
     const CHUNK_SIZE = 10;
-
     for (let fromBlock = startBlock; fromBlock <= current; fromBlock += CHUNK_SIZE) {
       let toBlock = fromBlock + CHUNK_SIZE - 1;
       if (toBlock > current) toBlock = current;
-
       try {
         const events = await contract.queryFilter(contract.filters[eventName](), fromBlock, toBlock);
         for (const ev of events) handler(...ev.args, ev);
@@ -164,7 +228,9 @@ async function startIndexer(contract) {
     }
   };
 
-  await catchUp("CampaignRegistered", onCampaignRegistered);
+  // Catch up campaign creation first so active flags are seeded
+  await catchUp("CampaignCreated", onCampaignCreated);
+  await catchUp("MilestonesEnabled", onMilestonesEnabled);
   await catchUp("MilestoneCreated", onMilestoneCreated);
   await catchUp("MilestoneFunded", onMilestoneFunded);
   await catchUp("MilestoneSubmitted", onMilestoneSubmitted);
@@ -173,9 +239,13 @@ async function startIndexer(contract) {
   await catchUp("MilestoneReleased", onMilestoneReleased);
   await catchUp("MilestoneVoted", onMilestoneVoted);
 
+  // FIX Issue 4: initial active-status sync after catch-up
+  await syncActiveCampaignStatuses(contract);
+
   console.log("[idx] Catch-up done. Starting live listener...");
 
-  contract.on("CampaignRegistered", onCampaignRegistered);
+  contract.on("CampaignCreated", onCampaignCreated);
+  contract.on("MilestonesEnabled", onMilestonesEnabled);
   contract.on("MilestoneCreated", onMilestoneCreated);
   contract.on("MilestoneFunded", onMilestoneFunded);
   contract.on("MilestoneSubmitted", onMilestoneSubmitted);
@@ -183,12 +253,52 @@ async function startIndexer(contract) {
   contract.on("MilestoneRejected", onMilestoneRejected);
   contract.on("MilestoneReleased", onMilestoneReleased);
   contract.on("MilestoneVoted", onMilestoneVoted);
+
+  // FIX Issue 4: periodic re-sync so deactivations are picked up quickly
+  const syncIntervalMs = parseInt(process.env.SYNC_INTERVAL_MS || "60000", 10);
+  setInterval(() => syncActiveCampaignStatuses(contract), syncIntervalMs);
+  console.log(`[idx] Active-status sync scheduled every ${syncIntervalMs / 1000}s`);
 }
 
 // ─── REST API ────────────────────────────────────────────────────────────────
 function buildApi() {
   const app = express();
   app.use(express.json());
+
+  // FIX Issue 4: GET /campaigns  — returns ONLY non-deactivated campaigns
+  // This matches what getActiveCampaigns() returns on the chain.
+  // Admin-deactivated campaigns are excluded so counts stay consistent.
+  app.get("/campaigns", (_req, res) => {
+    const active = Object.entries(store.campaigns)
+      .filter(([, c]) => c.active !== false)
+      .map(([id, c]) => ({
+        campaignId: id,
+        creator: c.creator,
+        active: c.active,
+        milestoneCount: c.milestoneIds.length,
+      }));
+    res.json(active);
+  });
+
+  // FIX Issue 4: GET /campaigns/count  — count of non-deactivated campaigns
+  // Use this for dashboards instead of relying on campaignCounter.
+  app.get("/campaigns/count", (_req, res) => {
+    const count = Object.values(store.campaigns).filter((c) => c.active !== false).length;
+    res.json({ count });
+  });
+
+  // FIX Issue 4: GET /campaigns/all  — all campaigns including deactivated
+  // Used by the admin panel to see the full picture.
+  app.get("/campaigns/all", (_req, res) => {
+    res.json(
+      Object.entries(store.campaigns).map(([id, c]) => ({
+        campaignId: id,
+        creator: c.creator,
+        active: c.active !== false, // false only if explicitly deactivated
+        milestoneCount: c.milestoneIds.length,
+      }))
+    );
+  });
 
   // GET /campaigns/:id/milestones  — all milestones for a campaign
   app.get("/campaigns/:campaignId/milestones", (req, res) => {
@@ -206,24 +316,12 @@ function buildApi() {
     res.json(m);
   });
 
-  // GET /campaigns  — list registered campaigns
-  app.get("/campaigns", (_req, res) => {
-    res.json(
-      Object.entries(store.campaigns).map(([id, c]) => ({
-        campaignId: id,
-        creator: c.creator,
-        milestoneCount: c.milestoneIds.length,
-      }))
-    );
-  });
-
   return app;
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 async function main() {
   const { RPC_URL, MILESTONE_MANAGER_ADDRESS, PORT = "4000" } = process.env;
-  const portToUse = PORT;
   if (!RPC_URL || !MILESTONE_MANAGER_ADDRESS) {
     console.error("Set RPC_URL and MILESTONE_MANAGER_ADDRESS in .env");
     process.exit(1);
@@ -235,10 +333,12 @@ async function main() {
   await startIndexer(contract);
 
   const app = buildApi();
-  app.listen(parseInt(portToUse, 10), () => {
-    console.log(`[idx] API listening on http://localhost:${portToUse}`);
+  app.listen(parseInt(PORT, 10), () => {
+    console.log(`[idx] API listening on http://localhost:${PORT}`);
     console.log(`[idx] Endpoints:
-  GET /campaigns
+  GET /campaigns             — non-deactivated campaigns (matches getActiveCampaigns)
+  GET /campaigns/count       — count of non-deactivated campaigns
+  GET /campaigns/all         — all campaigns including deactivated (admin use)
   GET /campaigns/:id/milestones
   GET /campaigns/:id/milestones/:mid`);
   });
@@ -251,7 +351,7 @@ if (require.main === module) {
 // Export for tests
 module.exports = {
   store,
-  onCampaignRegistered, onMilestoneCreated, onMilestoneFunded,
+  onCampaignCreated, onMilestonesEnabled, onMilestoneCreated, onMilestoneFunded,
   onMilestoneSubmitted, onMilestoneApproved, onMilestoneRejected,
-  onMilestoneReleased, onMilestoneVoted, buildApi,
+  onMilestoneReleased, onMilestoneVoted, buildApi, syncActiveCampaignStatuses,
 };

@@ -1,28 +1,28 @@
 /**
  * components/Dashboard/DashboardStats.js
  *
- * MANDATE 2 — Dashboard Data Audit:
- *   - All stats are computed from live on-chain data (useContractStats +
- *     useActiveCampaigns). No hardcoded values.
- *   - Fake trend percentages (+12%, +8.2%, etc.) REMOVED. Trend badges are
- *     only shown if a real delta can be computed; otherwise omitted entirely.
- *   - "Success Rate" metric was static (was showing a meaningless percentage).
- *     Replaced with "Total Backers" — the sum of contributorsCount across all
- *     campaigns, which is a real on-chain value.
- *   - "Platform Fees" stat is kept — it reads totalFeesCollected from the
- *     contract's getContractStats() which is always accurate.
+ * FIX Issue 4 — Ghost Campaign Counter:
+ *   The previous version used `contractStats?.totalCampaigns` (which maps to
+ *   `campaignCounter` on-chain) for the "Total Campaigns" stat. This counter
+ *   never decrements — it includes all campaigns ever created, including the
+ *   3 that the admin deactivated. So it would show "8" even though only 5
+ *   are visible.
+ *
+ *   The fix: "Total Campaigns" now equals `campaigns?.length` — the count of
+ *   campaigns actually returned by `getActiveCampaigns()`, which the contract
+ *   already filters to `campaigns[i].active == true`. Deactivated entries are
+ *   never included in this array, so the stat matches exactly what the user sees.
+ *
+ *   The raw `campaignCounter` (getContractStats) is retained for "Platform Fees"
+ *   which is the only stat that correctly comes from that source.
  */
 
 import { useContract } from "../../hooks/useContract";
 import { formatEther, formatNumber } from "../../utils/helpers";
 import { StatsCard } from "./StatsCard";
 import {
-  FiDollarSign,
-  FiTrendingUp,
-  FiUsers,
-  FiTarget,
-  FiActivity,
-  FiAward,
+  FiDollarSign, FiTrendingUp, FiUsers,
+  FiTarget, FiActivity, FiAward,
 } from "react-icons/fi";
 
 export default function DashboardStats() {
@@ -30,7 +30,6 @@ export default function DashboardStats() {
   const { data: contractStats } = useContractStats();
   const { data: campaigns } = useActiveCampaigns(0, 100);
 
-  // ── Safe coercion helpers ─────────────────────────────────────────────────
   const safeNumber = (value) => {
     if (value === null || value === undefined) return 0;
     if (typeof value === "bigint") return Number(value);
@@ -38,8 +37,6 @@ export default function DashboardStats() {
     if (typeof value === "number") return value;
     return 0;
   };
-
-  // ── Derived on-chain metrics ──────────────────────────────────────────────
 
   const totalRaised =
     campaigns?.reduce((sum, campaign) => {
@@ -51,7 +48,6 @@ export default function DashboardStats() {
       }
     }, 0) ?? 0;
 
-  // MANDATE 2: successfulCampaigns = those where raisedAmount >= targetAmount
   const successfulCampaigns =
     campaigns?.filter((campaign) => {
       try {
@@ -63,8 +59,6 @@ export default function DashboardStats() {
       }
     }).length ?? 0;
 
-  // MANDATE 2: "Total Backers" replaces the fake "Success Rate".
-  // Sum of contributorsCount across all campaigns — genuinely on-chain.
   const totalBackers =
     campaigns?.reduce((sum, campaign) => {
       try {
@@ -77,27 +71,32 @@ export default function DashboardStats() {
   const activeCampaigns =
     campaigns?.filter((campaign) => {
       try {
+        const now = Math.floor(Date.now() / 1000);
         const funded =
           parseFloat(formatEther(campaign?.raisedAmount || 0)) >=
           parseFloat(formatEther(campaign?.targetAmount || 1));
-        return Boolean(campaign?.active) && !funded;
+        const expired = Number(campaign?.deadline) < now;
+        return Boolean(campaign?.active) && !funded && !expired;
       } catch {
         return false;
       }
     }).length ?? 0;
 
-  // Safely format contract stats
-  const totalCampaignsCount = safeNumber(contractStats?.totalCampaigns);
+  // FIX Issue 4: use campaigns.length (only active/non-deactivated campaigns)
+  // NOT contractStats.totalCampaigns (which is the raw campaignCounter that
+  // includes deactivated entries and never decrements).
+  const totalCampaignsCount = campaigns?.length ?? 0;
+
   const totalFeesAmount = contractStats?.totalFees || 0;
 
-  // ── Stats array — no fake trend values ───────────────────────────────────
   const stats = [
     {
       title: "Total Campaigns",
       value: totalCampaignsCount.toString(),
       icon: FiTarget,
       color: "primary",
-      // No trend — we can't compute a delta from on-chain data alone
+      // Subtitle clarifies this is the live, deactivation-aware count
+      subtitle: "Active (non-deactivated)",
     },
     {
       title: "Total Raised",
@@ -112,7 +111,6 @@ export default function DashboardStats() {
       color: "tertiary",
     },
     {
-      // MANDATE 2: Real on-chain metric — sum of contributorsCount per campaign
       title: "Total Backers",
       value: formatNumber(totalBackers),
       icon: FiUsers,

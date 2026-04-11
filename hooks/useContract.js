@@ -1,24 +1,12 @@
 /**
  * hooks/useContract.js
  *
- * MANDATE 1 — Single contract hook.
+ * FIX Issue 7 — Voting & Refund Logic:
+ *   Added `useFinalizeVoting` hook that calls the contract's `finalizeVoting()`
+ *   function. This is exposed to MilestonePanel so any connected user can
+ *   trigger vote resolution once the 7-day voting window has expired.
  *
- * What changed:
- *   • MILESTONE_MANAGER_ADDRESS removed. All hooks (including milestone reads
- *     and writes) target `contractAddress` from useNetworkContracts().
- *   • MILESTONE_MANAGER_ABI import kept as a shim alias (it now equals
- *     CROWDFUNDING_ABI) so no call sites break during migration.
- *   • registerCampaign now passes ONE arg [campaignId].
- *     The old two-arg form [campaignId, campaignTarget] is gone.
- *   • useMyMilestoneContribution still reads from the main contract's
- *     getContribution(campaignId, address) — waterfall model unchanged.
- *   • useMyMilestoneVote now reads getVote() from the single contract.
- *
- * MANDATE 2 — Voting UI:
- *   • useMyMilestoneVote correctly uses the SINGLE contract address, so the
- *     per-user `hasVoted` flag is always from the correct source.
- *   • No other hook-level changes needed — per-user tracking is enforced
- *     inside the Solidity contract (votes[cId][mId][voter]).
+ * All other hooks remain unchanged from the MANDATE 1 / MANDATE 2 version.
  */
 
 import { useState, useEffect, useMemo } from "react";
@@ -35,21 +23,14 @@ import { STATUS_LABELS } from "../constants";
 import { CROWDFUNDING_ABI } from "../constants/abi";
 import { useNetworkContracts } from "./useNetworkContracts";
 
-// Shim: MILESTONE_MANAGER_ABI is now identical to CROWDFUNDING_ABI
 const MILESTONE_MANAGER_ABI = CROWDFUNDING_ABI;
 
 export const useContract = () => {
   const { address, isConnected } = useAccount();
-
-  // ── Live address from currently-connected chain ────────────────────────────
   const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
-
-  // MANDATE 1: milestoneAddress === CONTRACT_ADDRESS (single contract)
   const MILESTONE_MANAGER_ADDRESS = CONTRACT_ADDRESS;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Campaign — Write hooks
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Campaign — Write hooks ─────────────────────────────────────────────────
 
   const useCreateCampaign = (title, description, metadataHash, targetAmount, duration) => {
     const { config, error: prepareError } = usePrepareContractWrite({
@@ -98,9 +79,7 @@ export const useContract = () => {
     return { getRefund: write, getRefundAsync: writeAsync, isLoading, isSuccess, error };
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Campaign — Read hooks
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Campaign — Read hooks ──────────────────────────────────────────────────
 
   const useCampaign = (id) =>
     useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getCampaign", args: [id], enabled: !!id && !!CONTRACT_ADDRESS, watch: true });
@@ -142,9 +121,7 @@ export const useContract = () => {
     return { campaigns, isLoading, error };
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Milestone — Read hooks  (all point to CONTRACT_ADDRESS — single contract)
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Milestone — Read hooks ─────────────────────────────────────────────────
 
   const useCampaignMilestones = (campaignId) =>
     useContractRead({
@@ -153,10 +130,6 @@ export const useContract = () => {
       args: [campaignId], enabled: !!campaignId && !!CONTRACT_ADDRESS, watch: true,
     });
 
-  /**
-   * Reads contribution weight from the main campaign ledger (waterfall model).
-   * milestoneId is accepted for API compatibility but ignored in the call.
-   */
   const useMyMilestoneContribution = (campaignId, _milestoneId) =>
     useContractRead({
       address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI,
@@ -166,11 +139,6 @@ export const useContract = () => {
       watch: true, cacheTime: 15000,
     });
 
-  /**
-   * MANDATE 2 FIX — Per-user vote state.
-   * Reads votes[cId][mId][address] from the unified contract.
-   * Each wallet gets its own Vote struct — no global lockout possible.
-   */
   const useMyMilestoneVote = (campaignId, milestoneId) =>
     useContractRead({
       address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI,
@@ -189,9 +157,7 @@ export const useContract = () => {
       watch: true, cacheTime: 15000,
     });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Milestone — Write hooks  (all point to CONTRACT_ADDRESS — single contract)
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Milestone — Write hooks ────────────────────────────────────────────────
 
   const makeMilestoneWrite = (functionName, successMsg) => {
     const { write, writeAsync, isLoading, isSuccess, error, data } = useContractWrite({
@@ -202,12 +168,6 @@ export const useContract = () => {
     return { write, writeAsync, isLoading, isSuccess, error, data };
   };
 
-  /**
-   * MANDATE 1 FIX — registerCampaign now passes ONE arg.
-   * Old call: write({ args: [campaignId, campaignTarget] })
-   * New call: write({ args: [campaignId] })
-   * campaignTarget is no longer required — read from on-chain campaigns mapping.
-   */
   const useRegisterCampaignForMilestones = () =>
     makeMilestoneWrite("registerCampaign", "Milestone system active!");
 
@@ -216,6 +176,17 @@ export const useContract = () => {
   const useVoteMilestone = () => makeMilestoneWrite("voteMilestone", "Vote recorded!");
   const useWithdrawMilestone = () => makeMilestoneWrite("withdrawMilestoneFunds", "Funds released!");
   const useClaimMilestoneRefund = () => makeMilestoneWrite("claimMilestoneRefund", "Refund claimed!");
+
+  /**
+   * FIX Issue 7: Expose finalizeVoting so MilestonePanel can trigger on-chain
+   * vote resolution once the 7-day window has passed without quorum.
+   * Anyone may call this — the contract enforces the window requirement.
+   */
+  const useFinalizeVoting = () =>
+    makeMilestoneWrite(
+      "finalizeVoting",
+      "Vote finalized! Milestone status has been resolved on-chain."
+    );
 
   const useSubmitEvidence = () => {
     const { write, writeAsync, isLoading, isSuccess, error } = useContractWrite({
@@ -241,5 +212,6 @@ export const useContract = () => {
     // Milestone writes
     useRegisterCampaignForMilestones, useCreateMilestone, useContributeToMilestone,
     useSubmitEvidence, useVoteMilestone, useWithdrawMilestone, useClaimMilestoneRefund,
+    useFinalizeVoting, // FIX Issue 7
   };
 };
