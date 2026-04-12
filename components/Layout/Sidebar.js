@@ -1,16 +1,6 @@
 /**
  * components/Layout/Sidebar.js
- *
- * NETWORK SYNC FIX (unchanged):
- *   adminAddress now comes from useNetworkContracts() for live chain accuracy.
- *
- * MANDATE 5 — Light Mode Cream Aesthetic:
- *   - Sidebar background: bg-[#fdfaf6] (cream-100) in light mode instead of
- *     stark bg-white.
- *   - Border: border-stone-200 (warm sand) instead of border-gray-200.
- *   - Active nav item background: uses emerald-50/warm tint in light mode.
- *   - Hover states: bg-stone-100 instead of bg-gray-50.
- *   - All dark: classes are completely unchanged.
+ * Issue 4 — App renamed: "CrowdFund Pro" → "EthosFund", tagline updated.
  */
 
 import { useState, useEffect } from "react";
@@ -19,7 +9,7 @@ import { useRouter } from "next/router";
 import { useAccount } from "wagmi";
 import {
   FiHome, FiGrid, FiPlus, FiUser, FiHeart,
-  FiSettings, FiMenu, FiX, FiChevronLeft, FiSearch,
+  FiSettings, FiX, FiChevronLeft, FiSearch,
 } from "react-icons/fi";
 import { SIDEBAR_ITEMS } from "../../constants";
 import EthPriceWidget from "../EthPriceWidget/EthPriceWidget";
@@ -32,21 +22,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
   const { address, isConnected } = useAccount();
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // NETWORK SYNC FIX: adminAddress from live chain, not boot-time constant
   const { adminAddress: ADMIN_ADDRESS } = useNetworkContracts();
 
   useEffect(() => {
     if (address && ADMIN_ADDRESS) {
       const userIsAdmin = address.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
       setIsAdmin(userIsAdmin);
-
-      if (process.env.NODE_ENV === "development") {
-        console.log("[Sidebar] Admin check:", {
-          userAddress: address,
-          adminAddress: ADMIN_ADDRESS,
-          isAdmin: userIsAdmin,
-        });
-      }
     } else {
       setIsAdmin(false);
     }
@@ -58,7 +39,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
 
   return (
     <>
-      {/* Mobile Overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
@@ -66,7 +46,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
         />
       )}
 
-      {/* Sidebar — MANDATE 5: cream bg in light mode */}
       <div
         className={`
           fixed top-0 left-0 h-full flex flex-col
@@ -83,11 +62,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
           {!isCollapsed && (
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-emerald-glow">
-                <span className="text-white font-bold text-lg">CF</span>
+                {/* Issue 4: new initials */}
+                <span className="text-white font-bold text-lg">EF</span>
               </div>
               <div>
-                <span className="text-lg font-bold text-gray-900 dark:text-white">CrowdFund Pro</span>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Web3 Innovation</p>
+                {/* Issue 4: renamed */}
+                <span className="text-lg font-bold text-gray-900 dark:text-white">EthosFund</span>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Decentralised Funding</p>
               </div>
             </div>
           )}
@@ -111,7 +92,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
 
         {/* Middle Section */}
         <div className="flex-1 overflow-y-auto flex flex-col">
-          {/* Navigation */}
           <nav className="p-4 space-y-1.5 shrink-0">
             {filteredItems.map((item) => {
               const Icon = iconMap[item.icon];
@@ -124,9 +104,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
                   className={`
                     flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200
                     ${isActive
-                      /* MANDATE 5: Soft emerald-50 in light mode for active item */
                       ? "bg-emerald-50 dark:bg-secondary-900/20 text-secondary-700 dark:text-secondary-400 border-r-2 border-secondary-600"
-                      /* MANDATE 5: Warm stone hover instead of gray-50 */
                       : "text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-primary-800"
                     }
                     ${isCollapsed ? "justify-center" : ""}
@@ -145,10 +123,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
             })}
           </nav>
 
-          {/* Connection Status */}
           {!isCollapsed && (
             <div className="px-4 pb-4 shrink-0">
-              {/* MANDATE 5: warm sand divider */}
               <div className="pt-4 border-t border-stone-200 dark:border-primary-700">
                 <div
                   className={`
@@ -184,7 +160,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
             </div>
           )}
 
-          {/* ETH Price Widget */}
           <div className="flex-1 flex flex-col justify-center pb-4">
             <EthPriceWidget isCollapsed={isCollapsed} />
           </div>

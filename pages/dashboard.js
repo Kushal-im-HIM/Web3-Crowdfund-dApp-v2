@@ -277,7 +277,7 @@ function Dashboard() {
           </div>
           <div className="max-w-3xl relative z-10">
             <h1 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
-              Crowd Funding Marketplace Pro! 👋
+              Welcome to the Ethos Console 👋
             </h1>
             <p className="text-gray-700 dark:text-gray-300 text-lg mb-6">
               Discover amazing projects, support innovative ideas, or launch your own campaign.
@@ -299,10 +299,10 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Platform Statistics */}
+        {/* EthosFund Statistics */}
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-            Platform Statistics
+            EthosFund Statistics
           </h2>
           <DashboardStats />
         </div>
@@ -407,7 +407,7 @@ function Dashboard() {
                 No Active Campaigns
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Be the first to create a campaign on our platform!
+                Be the first to launch a campaign on EthosFund!
               </p>
               <button
                 onClick={() => router.push("/create-campaign")}

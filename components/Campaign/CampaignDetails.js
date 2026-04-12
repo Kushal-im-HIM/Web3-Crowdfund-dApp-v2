@@ -588,7 +588,7 @@ export default function CampaignDetails({ campaignId }) {
           <MilestonePanel
             campaignId={campaignId}
             creatorAddress={campaign.creator}
-            campaignRaisedAmount={campaign.raisedAmount}
+            campaignBudget={campaign.targetAmount}
           />
         )}
 
@@ -713,7 +713,10 @@ export default function CampaignDetails({ campaignId }) {
                     <div className="text-right">
                       <p className="font-bold text-gray-900 dark:text-white">{formatEther(c.totalAmount)} ETH</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {((Number(formatEther(c.totalAmount)) / Number(raisedAmount)) * 100).toFixed(1)}%
+                        {(Number(raisedAmount) > 0
+                          ? ((Number(formatEther(c.totalAmount)) / Number(raisedAmount)) * 100).toFixed(1)
+                          : ((Number(formatEther(c.totalAmount)) / Number(targetAmount)) * 100).toFixed(1)
+                        )}%
                       </p>
                     </div>
                   </div>

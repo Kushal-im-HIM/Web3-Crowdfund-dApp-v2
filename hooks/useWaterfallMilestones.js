@@ -1,56 +1,74 @@
 /**
  * hooks/useWaterfallMilestones.js
  *
- * ISSUE 1 FIX — Frontend Waterfall Model
+ * Issue 8 — Milestone progress bar collapse after withdrawal.
  *
- * Problem:
- *   Contributors were calling `contributeToMilestone` directly on the
- *   MilestoneManager contract, which meant the *main* campaign's `raisedAmount`
- *   and contributors list never updated. The campaign page looked empty/unfunded
- *   even when milestones were fully covered.
+ * ROOT CAUSE:
+ *   The old hook used `campaignRaisedAmount` (the live `raisedAmount` field
+ *   from the contract) as the waterfall budget. After the creator calls
+ *   `withdrawMilestoneFunds()` for Milestone 1, the contract does:
  *
- * Solution (Frontend Waterfall, no Solidity changes required):
- *   - All user contributions are routed ONLY through `contributeToCampaign`
- *     on the main CrowdfundingMarketplace contract.
- *   - This hook computes a *virtual* fill amount for each milestone in order,
- *     using the campaign's canonical `raisedAmount` as the single source of truth.
- *   - Milestone 1 fills first, then 2, then 3, etc., in a waterfall cascade.
- *   - Individual `milestone.raisedAmount` from MilestoneManager is preserved as
- *     metadata but is NOT used for the progress display.
+ *     campaign.raisedAmount -= milestone1.targetAmount
  *
- * Example:
- *   Campaign raisedAmount = 0.7 ETH
- *   Milestone 1 target    = 0.5 ETH → waterfallRaised = 0.5 ETH (100%)
- *   Milestone 2 target    = 0.5 ETH → waterfallRaised = 0.2 ETH  (40%)
- *   Milestone 3 target    = 0.5 ETH → waterfallRaised = 0.0 ETH   (0%)
+ *   So if the campaign raised 1.0 ETH and MS1 target was 0.5 ETH, after
+ *   withdrawal raisedAmount drops to 0.5 ETH. The waterfall then sees only
+ *   0.5 ETH total to distribute, so:
+ *     MS1 (target 0.5 ETH) → gets 0.5 ETH = 100%  ✓ (still fine)
+ *     MS2 (target 0.5 ETH) → gets 0.0 ETH = 0%    ✗ WRONG (it WAS 100%)
+ *
+ *   The user sees MS2's progress bar drop to 0% as soon as MS1 is withdrawn,
+ *   even though MS2 was fully funded.
+ *
+ * FIX:
+ *   Use `campaign.targetAmount` (the total goal, which never changes) as the
+ *   waterfall budget, NOT `raisedAmount` (which decrements on withdrawal).
+ *
+ *   For milestones that are already Released or Refunded, their progress bar
+ *   is pinned at 100% / 0% respectively based on their final status, not the
+ *   live waterfall calculation. This ensures:
+ *     - Released milestones always show 100% (funds were verified & withdrawn)
+ *     - Refunded milestones always show 0% (funds went back to contributors)
+ *     - Pending/Submitted/Approved milestones show the waterfall fill from
+ *       the stable targetAmount budget
+ *
+ * PROP CHANGE:
+ *   Callers must now pass `campaignTargetAmount` (campaign.targetAmount) as
+ *   the second argument instead of `campaignRaisedAmount`.
+ *   The prop name is kept generic (`campaignBudget`) to avoid confusion.
+ *   Both MilestonePanel.js and CampaignDetails.js are updated accordingly.
  */
 
 import { useMemo } from "react";
 
+// Milestone status integers matching the Solidity enum
+const MS_RELEASED = 4;
+const MS_REFUNDED = 5;
+
 /**
- * @param {Array}  milestones          – raw milestone objects from useCampaignMilestones()
- * @param {*}      campaignRaisedAmount – campaign.raisedAmount in wei (BigInt, string, or BN)
- * @returns {Array} milestones with two extra fields:
+ * @param {Array}  milestones      – raw milestone objects from useCampaignMilestones()
+ * @param {*}      campaignBudget  – campaign.targetAmount in wei (stable total goal, never decrements)
+ * @returns {Array} milestones with extra fields:
  *   - waterfallRaised  {BigInt}  virtual raised amount (wei)
  *   - waterfallPercent {number}  0‒100 fill percentage
  */
-export function useWaterfallMilestones(milestones, campaignRaisedAmount) {
-  // Stringify the dep so the memo doesn't re-run on every render due to BigInt identity
-  const raisedKey = campaignRaisedAmount?.toString() ?? "0";
+export function useWaterfallMilestones(milestones, campaignBudget) {
+  const budgetKey = campaignBudget?.toString() ?? "0";
 
   return useMemo(() => {
     if (!milestones || milestones.length === 0) return [];
 
-    // Normalise total raised to BigInt safely
     let remaining;
     try {
-      remaining = BigInt(raisedKey);
+      remaining = BigInt(budgetKey);
     } catch {
       remaining = 0n;
     }
 
     return milestones.map((milestone) => {
-      // Normalise target for this milestone
+      const statusNum = Number(milestone.status ?? 0);
+      const isReleased = statusNum === MS_RELEASED;
+      const isRefunded = statusNum === MS_REFUNDED;
+
       let target;
       try {
         target = BigInt(milestone.targetAmount?.toString() ?? "0");
@@ -58,7 +76,32 @@ export function useWaterfallMilestones(milestones, campaignRaisedAmount) {
         target = 0n;
       }
 
-      // Assign as much of the remaining budget as possible to this milestone
+      // Issue 8 FIX:
+      // Released milestones: always pin to 100% — funds were verified and withdrawn.
+      // The waterfall budget is NOT consumed for released milestones because
+      // the progress is now stable rather than derived from decremented raisedAmount.
+      if (isReleased) {
+        // Still consume from remaining so subsequent milestones calculate correctly
+        remaining = remaining >= target ? remaining - target : 0n;
+        return {
+          ...milestone,
+          waterfallRaised: target,
+          waterfallPercent: 100,
+        };
+      }
+
+      // Refunded milestones: pin to 0% — contributors got their money back.
+      if (isRefunded) {
+        // Don't consume remaining budget for refunded milestones
+        return {
+          ...milestone,
+          waterfallRaised: 0n,
+          waterfallPercent: 0,
+        };
+      }
+
+      // All other statuses (Pending, Submitted, Approved):
+      // Fill from the remaining stable budget (derived from targetAmount, not raisedAmount).
       let waterfallRaised;
       if (remaining >= target) {
         waterfallRaised = target;
@@ -72,9 +115,9 @@ export function useWaterfallMilestones(milestones, campaignRaisedAmount) {
         target === 0n
           ? 0
           : Math.min(
-              100,
-              Math.round((Number(waterfallRaised) * 100) / Number(target))
-            );
+            100,
+            Math.round((Number(waterfallRaised) * 100) / Number(target))
+          );
 
       return {
         ...milestone,
@@ -82,5 +125,5 @@ export function useWaterfallMilestones(milestones, campaignRaisedAmount) {
         waterfallPercent,
       };
     });
-  }, [milestones, raisedKey]);
+  }, [milestones, budgetKey]);
 }

@@ -94,7 +94,7 @@ export default function Home() {
       icon: FiGlobe,
       title: "Zero Platform Fees",
       description:
-        "0% commission on successful campaigns. Only a one-time creation fee to prevent spam.",
+        "0% platform fees on all campaigns. A tiny anti-spam deposit keeps bots out — that's it.",
       color: "amber",
     },
   ];
@@ -125,13 +125,13 @@ export default function Home() {
             {/* Logo */}
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-emerald-glow">
-                <span className="text-white font-bold text-lg">CF</span>
+                <span className="text-white font-bold text-lg">EF</span>
               </div>
               <div>
                 <span className="text-xl font-bold text-gray-900 dark:text-white">
-                  CrowdFund Pro
+                  EthosFund
                 </span>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Web3 Innovation</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Decentralised Funding</p>
               </div>
             </div>
 
@@ -175,7 +175,7 @@ export default function Home() {
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
               Transparent Funding for
               <span className="block mt-2 bg-gradient-emerald bg-clip-text text-transparent">
-                Web3 Innovation
+                Decentralised Funding
               </span>
             </h1>
 
@@ -291,7 +291,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Why Choose CrowdFund Pro?
+              Why Choose EthosFund?
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
               Built on Ethereum with cutting-edge smart contracts for maximum security and transparency
@@ -349,7 +349,7 @@ export default function Home() {
                 Create Campaign
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                Set your funding goal, milestones, and deadline. Pay a one-time creation fee to prevent spam.
+                Set your funding goal, milestones, and deadline. EthosFund takes 0% of your raised funds. A small anti-spam deposit is all that's required.
               </p>
             </div>
 
@@ -424,11 +424,11 @@ export default function Home() {
           <div className="flex flex-col items-center space-y-6">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-emerald-glow">
-                <span className="text-white font-bold text-lg">CF</span>
+                <span className="text-white font-bold text-lg">EF</span>
               </div>
               <div>
-                <span className="text-xl font-bold text-gray-900 dark:text-white">CrowdFund Pro</span>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Web3 Innovation Launchpad</p>
+                <span className="text-xl font-bold text-gray-900 dark:text-white">EthosFund</span>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Transparent Web3 Crowdfunding</p>
               </div>
             </div>
 
@@ -437,7 +437,7 @@ export default function Home() {
             </p>
 
             <div className="flex items-center space-x-6 text-sm text-gray-500 dark:text-gray-400">
-              <span>© 2025 CrowdFund Pro</span>
+              <span>© 2025 EthosFund</span>
               <span>•</span>
               <span>Built on Ethereum</span>
               <span>•</span>

@@ -165,16 +165,19 @@ export default function CreateCampaignForm() {
         </p>
       </div>
 
-      {/* Creation Fee Notice */}
-      <div className="mb-6 p-4 bg-tertiary-50 dark:bg-tertiary-900/20 border border-tertiary-200 dark:border-tertiary-800 rounded-lg">
+      {/* Issue 1 — 0% platform fee, anti-spam deposit framing */}
+      <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
         <div className="flex items-start space-x-2">
-          <FiInfo className="w-5 h-5 text-tertiary-500 mt-0.5" />
+          <FiInfo className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5" />
           <div>
-            <h4 className="text-tertiary-800 dark:text-tertiary-200 font-medium">
-              Creation Fee
+            <h4 className="text-emerald-800 dark:text-emerald-200 font-semibold">
+              EthosFund charges 0% platform fees
             </h4>
-            <p className="text-tertiary-700 dark:text-tertiary-300 text-sm">
-              A fee of {formatEther(CAMPAIGN_CREATION_FEE)} ETH is required to create a campaign.
+            <p className="text-emerald-700 dark:text-emerald-300 text-sm mt-0.5">
+              100% of every contribution goes directly to the campaign creator.
+              A one-time anti-spam deposit of{" "}
+              <strong>{formatEther(CAMPAIGN_CREATION_FEE)} ETH</strong>{" "}
+              is required to prevent bot campaigns — this is not a platform revenue fee.
             </p>
           </div>
         </div>

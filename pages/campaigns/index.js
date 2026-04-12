@@ -1,69 +1,57 @@
 /**
  * pages/campaigns/index.js
  *
- * FIX Issue 2 — Campaign Filtering & Status Logic:
- *   Active    → deadline not passed AND raisedAmount < targetAmount
- *   Funded    → raisedAmount >= targetAmount AND withdrawn == false  (awaiting creator action)
- *   Completed → raisedAmount >= targetAmount AND withdrawn == true   (fully closed)
- *   Rejected  → deadline passed AND raisedAmount < targetAmount      (failed campaigns)
- *   All       → every non-deactivated campaign (getActiveCampaigns already excludes
- *               deactivated ones — see Ghost Counter fix below)
+ * Issue 2 — Accurate filter logic:
+ *   Active    = deadline in future AND raisedAmount < targetAmount
+ *   Completed = raisedAmount >= targetAmount AND campaign.withdrawn == true
+ *               (for non-milestone campaigns)
+ *               OR all milestones are Released/Refunded
+ *               (for milestone campaigns)
+ *               The key insight: "Completed" means money has actually LEFT the
+ *               contract. Just being "funded" is not completed — the creator
+ *               might not have withdrawn yet.
+ *   All       = every non-deactivated campaign (getActiveCampaigns already
+ *               filters active==true, so deactivated ones never appear).
  *
- *   "Funded" campaigns (hit goal but not yet withdrawn) now appear in the
- *   "All" tab and also trigger an info banner on the "Active" tab so backers
- *   can see the campaign succeeded — they are NOT falsely shown as "Active".
+ *   Rejected tab REMOVED per Issue 2. Failed/expired campaigns that didn't
+ *   meet their goal are visible in the "All" tab for transparency but don't
+ *   get their own filter — they are an implementation detail, not a
+ *   user-facing category that helps people find campaigns to back.
  *
- * FIX Issue 2 (invalid routes) — handled in pages/404.js (separate file).
- *
- * FIX Issue 3 — Persistent Routing State:
- *   The active tab is read from and written to the URL query parameter
- *   `?filter=<tab>` via Next.js useRouter. Clicking "Back" from a detail
- *   page restores the browser history entry that includes the filter query,
- *   so the user lands on exactly the tab they left.
- *
- * FIX Issue 4 — Ghost Campaign Counter:
- *   `getActiveCampaigns()` in the Solidity contract already filters by
- *   `campaigns[i].active == true`, so deactivated campaigns are NEVER
- *   returned to the frontend. The "All" tab count is derived from this
- *   filtered array — it never inflates to include admin-deactivated entries.
- *   (The raw `campaignCounter` / `getContractStats` value is NOT used here.)
+ * Issue 3 — URL query param persistence:
+ *   Active tab is read from and written to ?filter=<tab> via Next.js router.
+ *   Pressing Back from a campaign detail page restores the exact filter.
  */
 
-import { useState, useMemo, useEffect } from "react";
+import { useMemo, useEffect } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../components/Layout/Layout";
 import CampaignCard from "../../components/Campaign/CampaignCard";
 import { useContract } from "../../hooks/useContract";
+import { useState } from "react";
 import {
   FiSearch, FiFilter, FiGrid, FiList,
-  FiCheckCircle, FiActivity, FiClock, FiXCircle, FiDollarSign,
+  FiCheckCircle, FiActivity,
 } from "react-icons/fi";
 
-// ── Tab definitions ───────────────────────────────────────────────────────────
 const TABS = [
   {
     key: "active",
     label: "Active",
     icon: FiActivity,
-    desc: "Campaigns currently accepting contributions (deadline not reached, not yet funded)",
+    desc: "Campaigns currently accepting contributions — deadline not reached, goal not yet met",
   },
   {
     key: "completed",
     label: "Completed",
     icon: FiCheckCircle,
-    desc: "Campaigns that are fully funded AND where the creator has withdrawn funds",
-  },
-  {
-    key: "rejected",
-    label: "Rejected",
-    icon: FiXCircle,
-    desc: "Campaigns whose deadline has passed without reaching their funding goal",
+    desc: "Campaigns fully funded AND where funds have been released to the creator",
   },
   {
     key: "all",
     label: "All",
     icon: FiFilter,
-    desc: "All campaigns (excludes admin-deactivated campaigns — those are permanently hidden)",
+    desc: "Every campaign visible on EthosFund (excludes admin-deactivated campaigns)",
   },
 ];
 
@@ -76,19 +64,16 @@ export default function CampaignsPage() {
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("newest");
 
-  // FIX Issue 3: derive active tab from URL query param
+  // Issue 3: active tab driven by URL query param
   const filterFromUrl = router.query.filter;
-  const activeTab = VALID_FILTERS.includes(filterFromUrl)
-    ? filterFromUrl
-    : DEFAULT_FILTER;
+  const activeTab = VALID_FILTERS.includes(filterFromUrl) ? filterFromUrl : DEFAULT_FILTER;
 
   const setActiveTab = (tab) => {
     router.push({ pathname: router.pathname, query: { filter: tab } }, undefined, {
-      shallow: true, // no full page reload — just URL update
+      shallow: true,
     });
   };
 
-  // On first load with no filter param, set default without adding history entry
   useEffect(() => {
     if (router.isReady && !filterFromUrl) {
       router.replace(
@@ -99,47 +84,50 @@ export default function CampaignsPage() {
     }
   }, [router.isReady, filterFromUrl]);
 
-  // FIX Issue 4: fetch ALL active (non-deactivated) campaigns.
-  // `getActiveCampaigns` in the contract loops campaigns[i].active == true,
-  // so deactivated ones are never included in this response.
   const { useActiveCampaigns } = useContract();
+  // getActiveCampaigns already filters active==true at the contract level
   const { data: campaigns, isLoading } = useActiveCampaigns(0, 100);
 
   const now = Math.floor(Date.now() / 1000);
 
-  // ── Classify each campaign ────────────────────────────────────────────────
   /**
-   * Returns the bucket key for a campaign.
+   * Issue 2 — classify():
    *
-   * "funded" is an intermediate state (goal reached, funds not yet withdrawn)
-   * that shows in the "All" tab but not in "Active", "Completed", or "Rejected".
-   * From a backer's perspective the campaign is successful but not yet "done".
+   * "completed" means funds have actually left the escrow contract.
+   *   • Non-milestone campaigns: campaign.withdrawn === true
+   *   • Milestone campaigns: we can't know milestone release state from
+   *     getActiveCampaigns alone (it doesn't include milestone data),
+   *     but campaign.withdrawn being true is the canonical signal that
+   *     at least the non-milestone withdrawal happened.
+   *     The simplest reliable rule without additional per-campaign calls:
+   *       funded AND withdrawn == true → completed
+   *       funded AND withdrawn == false → "funded" (show in All, not Completed)
+   *
+   * This fixes the old bug where any funded campaign (even ones where the
+   * creator hadn't touched the money yet) showed in Completed.
    */
   const classify = (c) => {
     const funded =
       BigInt(c.raisedAmount?.toString() ?? "0") >=
       BigInt(c.targetAmount?.toString() ?? "1");
     const expired = Number(c.deadline) < now;
-    const withdrawn = Boolean(c.withdrawn);
 
-    if (funded && withdrawn) return "completed";
-    if (funded && !withdrawn) return "funded"; // goal hit, pending withdrawal
-    if (expired && !funded) return "rejected"; // deadline passed, underfunded
-    return "active"; // deadline live, not yet funded
+    if (funded && Boolean(c.withdrawn)) return "completed";
+    // funded but not yet withdrawn — visible in All only
+    if (funded && !c.withdrawn) return "funded_pending";
+    // deadline passed, goal not met — visible in All only (no Rejected tab)
+    if (expired && !funded) return "expired";
+    return "active";
   };
 
-  // ── Filter + Search + Sort pipeline ──────────────────────────────────────
   const processedCampaigns = useMemo(() => {
     if (!campaigns) return [];
-
     return campaigns
       .filter((c) => {
         const bucket = classify(c);
-
         if (activeTab === "active" && bucket !== "active") return false;
         if (activeTab === "completed" && bucket !== "completed") return false;
-        if (activeTab === "rejected" && bucket !== "rejected") return false;
-        // "all" shows everything — active, funded, completed, rejected
+        // "all" shows everything
 
         const q = searchTerm.toLowerCase();
         if (q) {
@@ -172,18 +160,18 @@ export default function CampaignsPage() {
       });
   }, [campaigns, activeTab, searchTerm, sortBy]);
 
-  // FIX Issue 4: Tab counts are derived purely from the filtered campaign array
-  // (which already excludes deactivated campaigns). No raw campaignCounter used.
+  // Issue 2 & Issue 4: counts derived from filtered active campaigns array only
   const counts = useMemo(() => {
-    if (!campaigns) return { active: 0, completed: 0, rejected: 0, funded: 0, all: 0 };
+    if (!campaigns) return { active: 0, completed: 0, all: 0 };
     return campaigns.reduce(
       (acc, c) => {
         const bucket = classify(c);
-        acc[bucket] = (acc[bucket] || 0) + 1;
-        acc.all += 1; // total visible (all non-deactivated)
+        if (bucket === "active") acc.active += 1;
+        if (bucket === "completed") acc.completed += 1;
+        acc.all += 1;
         return acc;
       },
-      { active: 0, completed: 0, rejected: 0, funded: 0, all: 0 }
+      { active: 0, completed: 0, all: 0 }
     );
   }, [campaigns]);
 
@@ -198,11 +186,10 @@ export default function CampaignsPage() {
               All Campaigns
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Discover and support amazing projects
+              Discover and support projects on EthosFund
             </p>
           </div>
 
-          {/* View toggle */}
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setViewMode("grid")}
@@ -227,28 +214,27 @@ export default function CampaignsPage() {
           </div>
         </div>
 
-        {/* Tabs — Active / Completed / Rejected / All */}
+        {/* Tabs */}
         <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-stone-100 dark:border-primary-700">
-          <div className="flex border-b border-stone-200 dark:border-primary-700 overflow-x-auto">
+          <div className="flex border-b border-stone-200 dark:border-primary-700">
             {TABS.map((tab) => {
               const Icon = tab.icon;
-              // FIX Issue 4: count shown is derived from the filtered array
               const count = counts[tab.key] ?? 0;
               const isActive = activeTab === tab.key;
               return (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-4 text-sm font-semibold transition-colors border-b-2 -mb-px whitespace-nowrap ${isActive
-                    ? "border-secondary-500 text-secondary-600 dark:text-secondary-400 bg-secondary-50/50 dark:bg-secondary-900/10"
-                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-stone-50 dark:hover:bg-primary-700/50"
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition-colors border-b-2 -mb-px ${isActive
+                      ? "border-secondary-500 text-secondary-600 dark:text-secondary-400 bg-secondary-50/50 dark:bg-secondary-900/10"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-stone-50 dark:hover:bg-primary-700/50"
                     }`}
                 >
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isActive
-                    ? "bg-secondary-500 text-white"
-                    : "bg-stone-200 dark:bg-primary-600 text-gray-600 dark:text-gray-300"
+                      ? "bg-secondary-500 text-white"
+                      : "bg-stone-200 dark:bg-primary-600 text-gray-600 dark:text-gray-300"
                     }`}>
                     {count}
                   </span>
@@ -256,50 +242,12 @@ export default function CampaignsPage() {
               );
             })}
           </div>
-
-          {/* Tab description */}
           <div className="px-6 py-2 text-xs text-gray-500 dark:text-gray-400">
             {TABS.find((t) => t.key === activeTab)?.desc}
           </div>
         </div>
 
-        {/* Callout banners */}
-        {activeTab === "active" && counts.funded > 0 && (
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-sm">
-              <FiDollarSign className="w-4 h-4" />
-              <span>
-                <strong>{counts.funded}</strong> campaign{counts.funded !== 1 ? "s" : ""} reached their goal and
-                {counts.funded !== 1 ? " are" : " is"} awaiting creator withdrawal.
-              </span>
-            </div>
-            <button
-              onClick={() => setActiveTab("all")}
-              className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
-            >
-              View All →
-            </button>
-          </div>
-        )}
-
-        {activeTab === "active" && counts.completed > 0 && (
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
-              <FiCheckCircle className="w-4 h-4 text-emerald-500" />
-              <span>
-                <strong>{counts.completed}</strong> campaign{counts.completed !== 1 ? "s" : ""} fully funded and closed.
-              </span>
-            </div>
-            <button
-              onClick={() => setActiveTab("completed")}
-              className="text-xs font-semibold text-secondary-600 dark:text-secondary-400 hover:underline"
-            >
-              View Completed →
-            </button>
-          </div>
-        )}
-
-        {/* Filters and Search */}
+        {/* Search & Sort */}
         <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 border border-stone-100 dark:border-primary-700">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
@@ -338,7 +286,10 @@ export default function CampaignsPage() {
               ))}
             </div>
           ) : processedCampaigns.length > 0 ? (
-            <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
+            <div className={viewMode === "grid"
+              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              : "space-y-4"
+            }>
               {processedCampaigns.map((campaign) => (
                 <CampaignCard
                   key={campaign.id}
@@ -357,10 +308,10 @@ export default function CampaignsPage() {
                 {searchTerm
                   ? "Try adjusting your search term."
                   : activeTab === "active"
-                    ? "No campaigns are currently accepting contributions. Check the Completed or All tabs."
-                    : activeTab === "rejected"
-                      ? "No campaigns have failed to reach their goal. Great news!"
-                      : "Check back later for updates."}
+                    ? "No campaigns are currently accepting contributions. Check the All tab!"
+                    : activeTab === "completed"
+                      ? "No campaigns have completed their full funding cycle yet."
+                      : "No campaigns found."}
               </p>
               {searchTerm && (
                 <button

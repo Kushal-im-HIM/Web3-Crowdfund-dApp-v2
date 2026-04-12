@@ -1,43 +1,37 @@
 /**
  * components/Milestone/MilestonePanel.js
  *
- * FIX — Voting Error Handling & Race Condition UX
+ * Issue 6 — Remove voting window countdown.
+ *   The 7-day voting window runs from the MILESTONE deadline, not the campaign
+ *   deadline. Showing a countdown like "Voting closes in 6d 23h" is misleading
+ *   because it doesn't align with the campaign deadline the user set. Instead
+ *   we show a simple status label: "Voting in progress" or "Window expired —
+ *   ready to finalize." No live timer.
  *
- * Problem 1 — Raw MetaMask popup on "Voting not open"
- *   handleVote() now runs a series of CLIENT-SIDE pre-flight checks BEFORE
- *   sending any tx. If any check fails, a friendly toast() is shown and the
- *   transaction is never sent. The raw MetaMask error box is never seen.
+ * Issue 7 — Campaign owner can trigger Finalize Vote after window expires.
+ *   Scenario: 4 donors, deadline over, campaign fully funded, only 3 voted.
+ *   The 4th donor didn't vote. With our contract fix (_tryResolveByVote only
+ *   auto-resolves at 100% participation), the milestone stays Submitted forever
+ *   until someone calls finalizeVoting(). The creator (campaign owner) is the
+ *   most motivated person to do this — they can't withdraw funds until the
+ *   milestone is Approved. A prominent "Settle Vote & Unlock Funds" button now
+ *   appears for the creator once the voting window has expired.
  *
- *   Checks (in order):
- *     1. statusLabel !== "Submitted" → toast explaining current status
- *     2. votingWindowExpired         → tell user to click Finalize Vote instead
- *     3. hasVoted                    → "you already voted"
- *     4. !hasContributed             → "only contributors can vote"
- *
- * Problem 2 — Live voting window countdown
- *   Every Submitted milestone now shows a real-time countdown ("6d 23h 11m")
- *   so donors know exactly how long they have. It turns amber at < 1 hour,
- *   red when expired.
- *
- * Problem 3 — Stale page state
- *   When another wallet's tx resolves a milestone between page load and click,
- *   the UI still shows vote buttons because wagmi's cache hasn't refreshed.
- *   The pre-flight status check catches this and tells the user to refresh
- *   instead of sending a doomed transaction.
- *
- * Problem 4 — All write calls have friendly onError handlers
- *   extractRevertReason() strips viem boilerplate and surfaces only the
- *   human-readable contract revert string in a toast.
+ * Issue 8 — Accept campaignBudget prop (campaign.targetAmount, stable).
+ *   CampaignDetails now passes `campaignBudget={campaign.targetAmount}` instead
+ *   of the old `campaignRaisedAmount`. The hook useWaterfallMilestones uses
+ *   targetAmount as the stable distribution budget so bars don't collapse after
+ *   withdrawals. This component forwards that prop to the hook.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { ethers } from "ethers";
 import { useAccount } from "wagmi";
 import { toast } from "react-hot-toast";
 import {
   FiUpload, FiExternalLink, FiCheckCircle, FiXCircle,
   FiClock, FiUsers, FiFlag, FiArrowDown, FiAlertCircle,
-  FiZap, FiRefreshCw, FiInfo,
+  FiZap, FiInfo,
 } from "react-icons/fi";
 import { uploadToIPFS } from "../../utils/ipfs";
 import { useContract } from "../../hooks/useContract";
@@ -45,7 +39,7 @@ import { useWaterfallMilestones } from "../../hooks/useWaterfallMilestones";
 import { STATUS_LABELS } from "../../constants";
 
 const IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
-// Must match the contract's default votingWindowSeconds (7 days)
+// Must match the contract's default votingWindowSeconds
 const VOTING_WINDOW_SECONDS = 7 * 24 * 3600;
 
 const IPFS_REGEX = /^(Qm[a-zA-Z0-9]{44}|b[a-zA-Z0-9]{40,})$/;
@@ -69,46 +63,12 @@ const fmtBigInt = (wei) => {
   catch { return "0.0000"; }
 };
 
-/** Pull the human-readable revert reason out of a wagmi/viem error. */
 function extractRevertReason(err) {
-  const raw = err?.cause?.reason
-    || err?.reason
-    || err?.data?.message
-    || err?.message
-    || "Transaction failed";
-
-  // Strip viem wrapper text so only the reason shows
-  const m = raw.match(/reason:\s*"?([^"\\n]+)"?/i)
-    || raw.match(/reverted with the following reason:\s*(.+)/i);
+  const raw = err?.cause?.reason || err?.reason || err?.data?.message || err?.message || "Transaction failed";
+  const m = raw.match(/reason:\s*"?([^"\\n]+)"?/i) || raw.match(/reverted with the following reason:\s*(.+)/i);
   if (m) return m[1].trim();
-
-  if (/user rejected|user denied/i.test(raw))
-    return "You rejected the transaction in MetaMask.";
-
+  if (/user rejected|user denied/i.test(raw)) return "You rejected the transaction in MetaMask.";
   return raw.length > 140 ? raw.slice(0, 140) + "…" : raw;
-}
-
-// ── Live countdown ────────────────────────────────────────────────────────────
-function useCountdown(targetTs) {
-  const calc = () => Math.max(0, targetTs - Math.floor(Date.now() / 1000));
-  const [s, setS] = useState(calc);
-  useEffect(() => {
-    if (s <= 0) return;
-    const id = setInterval(() => setS(calc()), 1000);
-    return () => clearInterval(id);
-  }, [targetTs]);
-  return s;
-}
-
-function fmtDuration(s) {
-  if (s <= 0) return "Expired";
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${m}m ${sec}s`;
-  return `${m}m ${sec}s`;
 }
 
 // ─── MilestoneCard ────────────────────────────────────────────────────────────
@@ -123,10 +83,8 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
   const { data: myContrib } = useMyMilestoneContribution(campaignId, milestone.id);
   const { data: myVoteData } = useMyMilestoneVote(campaignId, milestone.id);
 
-  /** Returns a wagmi onError handler that shows a friendly toast. */
   const errHandler = (ctx) => (err) => {
-    const reason = extractRevertReason(err);
-    toast.error(`${ctx} failed: ${reason}`, { duration: 6000 });
+    toast.error(`${ctx}: ${extractRevertReason(err)}`, { duration: 6000 });
     console.error(`[MilestonePanel:${ctx}]`, err);
   };
 
@@ -136,7 +94,6 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
   const { write: claimRefund, isLoading: refunding } = useClaimMilestoneRefund();
   const { write: finalizeVote, isLoading: finalizing } = useFinalizeVoting();
 
-  // Evidence form state
   const [ipfsHashManual, setIpfsHashManual] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [evidenceFile, setEvidenceFile] = useState(null);
@@ -152,13 +109,12 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
   const hasContributed = myContrib && BigInt(myContrib.toString()) > 0n;
   const hasVoted = myVoteData?.hasVoted === true;
 
-  // Voting window
-  const votingWindowEnd = Number(milestone.deadline) + VOTING_WINDOW_SECONDS;
+  // Issue 6: no live countdown — just a boolean for state branching
   const now = Math.floor(Date.now() / 1000);
+  const votingWindowEnd = Number(milestone.deadline) + VOTING_WINDOW_SECONDS;
   const votingWindowExpired = now >= votingWindowEnd;
-  const secondsLeft = useCountdown(votingWindowEnd);
 
-  // Vote totals
+  // Vote tallies
   const votesFor = BigInt((milestone.totalVotesFor || 0).toString());
   const votesAgainst = BigInt((milestone.totalVotesAgainst || 0).toString());
   const totalVotesWei = votesFor + votesAgainst;
@@ -168,71 +124,43 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
 
   // ── Pre-flight vote guard ─────────────────────────────────────────────────
   const handleVote = (inFavour) => {
-    // 1. Status guard — catches stale UI where another wallet already resolved
     if (statusLabel !== "Submitted") {
       const msgs = {
-        Approved: "✅ This milestone was already approved — no more votes accepted.",
-        Rejected: "❌ This milestone was already rejected — you can claim a refund.",
+        Approved: "✅ This milestone was already approved.",
+        Rejected: "❌ This milestone was rejected — you can claim a refund.",
         Pending: "Evidence hasn't been submitted yet. Voting hasn't started.",
-        Released: "This milestone's funds have already been released.",
-        Refunded: "This milestone's funds have already been refunded.",
       };
-      toast(msgs[statusLabel] || `Voting is not open (status: ${statusLabel}).`, {
-        icon: "ℹ️", duration: 5000,
-      });
+      toast(msgs[statusLabel] || `Voting is not open (status: ${statusLabel}).`, { icon: "ℹ️", duration: 5000 });
       return;
     }
-
-    // 2. Window guard — voting window may have closed since page load
     if (votingWindowExpired) {
-      toast.error(
-        "The voting window has closed. Use \"Finalize Vote\" to settle this milestone on-chain.",
-        { duration: 6000 }
-      );
+      toast.error('The voting window has closed. Use "Settle Vote" to finalise this milestone.', { duration: 6000 });
       return;
     }
+    if (hasVoted) { toast("You have already cast your vote.", { icon: "ℹ️" }); return; }
+    if (!hasContributed) { toast.error("Only contributors can vote."); return; }
 
-    // 3. Duplicate vote guard
-    if (hasVoted) {
-      toast("You have already cast your vote on this milestone.", { icon: "ℹ️" });
-      return;
-    }
-
-    // 4. Contribution guard
-    if (!hasContributed) {
-      toast.error("Only contributors can vote. You have no contribution in this campaign.");
-      return;
-    }
-
-    // All guards passed — send tx with friendly error handler
-    vote({
-      args: [campaignId, milestone.id, inFavour],
-      onError: errHandler("Vote"),
-    });
+    vote({ args: [campaignId, milestone.id, inFavour], onError: errHandler("Vote") });
   };
 
   // ── Evidence validation ───────────────────────────────────────────────────
   const validateEvidence = (hash, url) => {
     let ok = true;
     if (hash.trim() && !IPFS_REGEX.test(hash.trim())) {
-      setIpfsError("Invalid IPFS hash — must be CIDv0 (Qm…, 46 chars) or CIDv1 (b…, 41+ chars).");
-      ok = false;
+      setIpfsError("Invalid IPFS hash — CIDv0 (Qm…, 46 chars) or CIDv1 (b…, 41+ chars)."); ok = false;
     } else { setIpfsError(""); }
     if (url.trim() && !GITHUB_REGEX.test(url.trim())) {
-      setUrlError("Must be a valid GitHub URL — e.g. https://github.com/user/repo");
-      ok = false;
+      setUrlError("Must be a valid GitHub URL — e.g. https://github.com/user/repo"); ok = false;
     } else { setUrlError(""); }
     return ok;
   };
-
   const hasValidationErrors = Boolean(ipfsError || urlError);
 
   const handleEvidenceSubmit = async () => {
     const hash = ipfsHashManual.trim();
     const url = evidenceUrl.trim();
     if (!validateEvidence(hash, url)) return;
-    if (!hash && !url && !evidenceFile)
-      return toast.error("Provide an IPFS hash, a GitHub URL, or upload a file.");
+    if (!hash && !url && !evidenceFile) return toast.error("Provide an IPFS hash, a GitHub URL, or upload a file.");
 
     let finalHash = hash;
     if (evidenceFile) {
@@ -243,29 +171,16 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           finalHash = res.hash || res.IpfsHash || "";
           toast.success("File uploaded to IPFS!");
           if (finalHash && !IPFS_REGEX.test(finalHash)) {
-            setIpfsError("IPFS returned an unrecognised hash — enter it manually.");
-            return;
+            setIpfsError("IPFS returned an unrecognised hash — enter it manually."); return;
           }
-        } else {
-          toast.error("IPFS upload failed — enter the hash manually.");
-          return;
-        }
-      } catch (err) {
-        toast.error("Upload error: " + err.message);
-        return;
-      } finally { setUploadingEv(false); }
+        } else { toast.error("IPFS upload failed — enter the hash manually."); return; }
+      } catch (err) { toast.error("Upload error: " + err.message); return; }
+      finally { setUploadingEv(false); }
     }
+    if (!finalHash && !url) return toast.error("Provide an IPFS hash or a GitHub evidence URL.");
 
-    if (!finalHash && !url)
-      return toast.error("Provide an IPFS hash or a GitHub evidence URL.");
-
-    submitEv({
-      args: [campaignId, milestone.id, finalHash, url],
-      onError: errHandler("Submit Evidence"),
-    });
-    setShowEvForm(false);
-    setIpfsHashManual("");
-    setEvidenceUrl("");
+    submitEv({ args: [campaignId, milestone.id, finalHash, url], onError: errHandler("Submit Evidence") });
+    setShowEvForm(false); setIpfsHashManual(""); setEvidenceUrl("");
   };
 
   return (
@@ -278,9 +193,7 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
             <span className="shrink-0 w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center border border-emerald-200 dark:border-emerald-500/30">
               {index + 1}
             </span>
-            <h4 className="font-semibold text-sm text-slate-900 dark:text-white truncate">
-              {milestone.title}
-            </h4>
+            <h4 className="font-semibold text-sm text-slate-900 dark:text-white truncate">{milestone.title}</h4>
           </div>
           <p className="text-xs text-slate-500 mt-0.5 pl-7">
             Deadline: {deadlineDt} · {milestone.contributorsCount?.toString() ?? "0"} Backers
@@ -291,11 +204,9 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
         </span>
       </div>
 
-      <p className="text-slate-700 dark:text-slate-400 text-sm mb-4 leading-relaxed pl-7">
-        {milestone.description}
-      </p>
+      <p className="text-slate-700 dark:text-slate-400 text-sm mb-4 leading-relaxed pl-7">{milestone.description}</p>
 
-      {/* Waterfall progress */}
+      {/* Progress bar — Issue 8: uses stable waterfall from targetAmount */}
       <div className="space-y-1 mb-4">
         <div className="flex justify-between text-xs">
           <span className="text-slate-700 dark:text-slate-400 font-medium">
@@ -312,22 +223,6 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           <div className="bg-emerald-500 h-2 rounded-full transition-all duration-700" style={{ width: waterfallPercent + "%" }} />
         </div>
       </div>
-
-      {/* ── Live voting window countdown ── */}
-      {statusLabel === "Submitted" && (
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-4 text-xs font-medium border ${votingWindowExpired
-            ? "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800 text-red-700 dark:text-red-400"
-            : secondsLeft < 3600
-              ? "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800 text-amber-700 dark:text-amber-400"
-              : "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 text-blue-700 dark:text-blue-400"
-          }`}>
-          <FiClock className="w-3.5 h-3.5 shrink-0" />
-          {votingWindowExpired
-            ? <span>Voting window closed — click <strong>Finalize Vote</strong> below to record the result on-chain.</span>
-            : <span>Voting window closes in <strong>{fmtDuration(secondsLeft)}</strong>. All contributors should vote before then.</span>
-          }
-        </div>
-      )}
 
       {/* Evidence links */}
       {["Submitted", "Approved", "Rejected", "Released"].includes(statusLabel) &&
@@ -361,17 +256,11 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
             <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: approvalPct + "%" }} />
           </div>
           <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-500 mt-1.5">
-            <span className="flex items-center gap-1">
-              <FiCheckCircle className="w-3 h-3 text-emerald-500" />
-              {fmtBigInt(votesFor)} ETH For
-            </span>
-            <span className="flex items-center gap-1">
-              <FiXCircle className="w-3 h-3 text-red-400" />
-              {fmtBigInt(votesAgainst)} ETH Against
-            </span>
+            <span className="flex items-center gap-1"><FiCheckCircle className="w-3 h-3 text-emerald-500" />{fmtBigInt(votesFor)} ETH For</span>
+            <span className="flex items-center gap-1"><FiXCircle className="w-3 h-3 text-red-400" />{fmtBigInt(votesAgainst)} ETH Against</span>
           </div>
           <p className="text-[10px] text-slate-400 mt-1.5 italic">
-            Result is finalised when the window expires or all campaign stake has voted.
+            Settled when window expires (anyone calls Finalize Vote) or when all campaign stake has voted.
           </p>
         </div>
       )}
@@ -379,12 +268,12 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
       {/* ── Actions ── */}
       <div className="pt-3 border-t border-slate-200 dark:border-slate-700/30 space-y-3">
 
-        {/* Pending: waterfall hint for non-creators */}
+        {/* Pending + non-creator: waterfall hint */}
         {statusLabel === "Pending" && !isCreator && (
           <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 rounded-lg px-3 py-2.5">
             <FiArrowDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <p className="text-xs text-emerald-800 dark:text-emerald-400 leading-relaxed">
-              To fund this milestone, use the <strong>Contribute Now</strong> button at the top of this page.
+              To fund this milestone, use the <strong>Contribute Now</strong> button at the top of the page.
               Funds fill milestones automatically in sequence.
             </p>
           </div>
@@ -394,24 +283,23 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
         {statusLabel === "Submitted" && !isCreator && !hasContributed && (
           <p className="text-xs text-slate-500 dark:text-slate-400 flex items-start gap-1.5">
             <FiAlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
-            You haven&apos;t contributed to this campaign so you cannot vote.
+            You haven&apos;t contributed to this campaign and cannot vote.
           </p>
         )}
 
-        {/* Submitted: contributor — voting info blurb */}
+        {/* Submitted: voting info for contributor */}
         {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && !votingWindowExpired && (
           <div className="flex items-start gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 dark:bg-slate-800/60 dark:border-slate-700/40 rounded-lg">
             <FiInfo className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
             <p className="text-[11px] text-slate-500 leading-relaxed">
               Your vote is weighted by your ETH contribution (<strong>{fmt(myContrib)} ETH</strong>).
-              Voting stays open until the window closes — all contributors can vote before then.
-              The result is only settled at window expiry via <strong>Finalize Vote</strong>, or
-              immediately when all campaign stake has been cast.
+              Votes stay open until the 7-day window closes. The result is settled when anyone calls
+              <strong> Finalize Vote</strong> after expiry, or immediately if all campaign stake has voted.
             </p>
           </div>
         )}
 
-        {/* Submitted: vote buttons — uses handleVote() with all pre-flight checks */}
+        {/* Submitted: vote buttons */}
         {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && !votingWindowExpired && (
           <div>
             <p className="text-xs text-slate-600 dark:text-slate-500 mb-2">
@@ -432,63 +320,68 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           </div>
         )}
 
-        {/* Submitted: already voted confirmation */}
+        {/* Submitted: already voted */}
         {statusLabel === "Submitted" && !isCreator && hasContributed && hasVoted && (
           <p className="text-sm text-slate-700 dark:text-slate-400 flex items-center gap-1.5">
             <FiCheckCircle className="w-4 h-4 text-emerald-500" />
             You voted to <strong className="ml-1">{myVoteData?.inFavour ? "approve ✅" : "reject ❌"}</strong> this milestone.
-            {!votingWindowExpired && (
-              <span className="text-slate-400 text-xs ml-1">
-                ({fmtDuration(secondsLeft)} left for others)
-              </span>
-            )}
           </p>
         )}
 
-        {/* Submitted: window expired — contributor didn't vote */}
+        {/* Submitted: window expired, contributor didn't vote */}
         {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && votingWindowExpired && (
           <div className="flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800 rounded-lg">
             <FiAlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
             <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
               The voting window closed before you voted — your stake won&apos;t count this round.
-              Click <strong>Finalize Vote</strong> below to record the on-chain result.
             </p>
           </div>
         )}
 
-        {/* Finalize Vote — anyone can call this after window expires */}
+        {/*
+          Issue 7 — "Settle Vote & Unlock Funds" for the CREATOR.
+          After the voting window expires with less than 100% participation,
+          the milestone stays Submitted. The creator cannot withdraw until it
+          reaches Approved. This button lets them (or anyone) call finalizeVoting()
+          which resolves based on accumulated stake-weighted votes.
+          Shown prominently for the creator because they are most motivated.
+        */}
         {statusLabel === "Submitted" && votingWindowExpired && address && (
-          <button
-            disabled={finalizing}
-            onClick={() => finalizeVote({
-              args: [campaignId, milestone.id],
-              onError: errHandler("Finalize Vote"),
-            })}
-            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed"
-          >
-            <FiZap className="w-3.5 h-3.5" />
-            {finalizing ? "Finalizing…" : "Finalize Vote"}
-          </button>
+          <div>
+            {isCreator && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-2 flex items-start gap-1.5">
+                <FiAlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                The voting window has expired. Settle the vote to determine the outcome
+                and unlock fund withdrawal if approved.
+              </p>
+            )}
+            <button
+              disabled={finalizing}
+              onClick={() => finalizeVote({
+                args: [campaignId, milestone.id],
+                onError: errHandler("Finalize Vote"),
+              })}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed ${isCreator
+                  ? "bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white"
+                  : "bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white"
+                }`}
+            >
+              <FiZap className="w-3.5 h-3.5" />
+              {finalizing
+                ? "Settling…"
+                : isCreator
+                  ? "Settle Vote & Unlock Funds"
+                  : "Finalize Vote"
+              }
+            </button>
+          </div>
         )}
 
-        {/* Refresh hint after finalize */}
-        {statusLabel === "Submitted" && votingWindowExpired && hasVoted && (
-          <p className="text-xs text-slate-400 flex items-center gap-1.5">
-            <FiRefreshCw className="w-3 h-3" />
-            After finalizing, refresh the page if the status doesn&apos;t update automatically.
-          </p>
-        )}
-
-        {/* Claim Refund — ONLY on Rejected, never during Submitted */}
+        {/* Claim Refund — ONLY on Rejected */}
         {statusLabel === "Rejected" && !isCreator && hasContributed && (
-          <button
-            disabled={refunding}
-            onClick={() => claimRefund({
-              args: [campaignId, milestone.id],
-              onError: errHandler("Claim Refund"),
-            })}
-            className="bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed"
-          >
+          <button disabled={refunding}
+            onClick={() => claimRefund({ args: [campaignId, milestone.id], onError: errHandler("Claim Refund") })}
+            className="bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed">
             {refunding ? "Processing…" : "Claim Refund"}
           </button>
         )}
@@ -521,7 +414,7 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
                     onChange={(e) => { setIpfsHashManual(e.target.value); if (ipfsError) setIpfsError(""); }}
                     className={`w-full border rounded-lg p-2 text-sm text-slate-900 dark:text-white focus:ring-1 outline-none transition-colors ${ipfsError ? "border-red-400 focus:ring-red-400 bg-red-50 dark:bg-red-900/10" : "border-slate-300 dark:border-slate-600/50 bg-white dark:bg-slate-900/50 focus:ring-emerald-500/60"}`}
                   />
-                  {ipfsError && <p className="flex items-start gap-1 mt-1 text-[11px] text-red-500 dark:text-red-400"><FiAlertCircle className="w-3 h-3 shrink-0 mt-0.5" />{ipfsError}</p>}
+                  {ipfsError && <p className="flex items-start gap-1 mt-1 text-[11px] text-red-500"><FiAlertCircle className="w-3 h-3 shrink-0 mt-0.5" />{ipfsError}</p>}
                 </div>
 
                 <div>
@@ -530,7 +423,7 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
                     onChange={(e) => { setEvidenceUrl(e.target.value); if (urlError) setUrlError(""); }}
                     className={`w-full border rounded-lg p-2 text-sm text-slate-900 dark:text-white focus:ring-1 outline-none transition-colors ${urlError ? "border-red-400 focus:ring-red-400 bg-red-50 dark:bg-red-900/10" : "border-slate-300 dark:border-slate-600/50 bg-white dark:bg-slate-900/50 focus:ring-emerald-500/60"}`}
                   />
-                  {urlError && <p className="flex items-start gap-1 mt-1 text-[11px] text-red-500 dark:text-red-400"><FiAlertCircle className="w-3 h-3 shrink-0 mt-0.5" />{urlError}</p>}
+                  {urlError && <p className="flex items-start gap-1 mt-1 text-[11px] text-red-500"><FiAlertCircle className="w-3 h-3 shrink-0 mt-0.5" />{urlError}</p>}
                 </div>
 
                 <div className="flex gap-2 pt-1">
@@ -549,12 +442,11 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           </div>
         )}
 
-        {/* Creator: waiting for verdict */}
-        {isCreator && statusLabel === "Submitted" && (
+        {/* Creator: waiting for verdict, voting in progress */}
+        {isCreator && statusLabel === "Submitted" && !votingWindowExpired && (
           <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
             <FiClock className="w-4 h-4" />
-            Awaiting Oracle or DAO settlement
-            {!votingWindowExpired && <span className="text-xs text-slate-400 ml-1">({fmtDuration(secondsLeft)} left in window)</span>}.
+            Evidence submitted. DAO voting in progress — awaiting Oracle or vote settlement.
           </p>
         )}
 
@@ -567,12 +459,14 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           </button>
         )}
 
-        {/* Released */}
+        {/* Released — Issue 8: show a clear confirmation banner */}
         {statusLabel === "Released" && (
-          <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-            <FiCheckCircle className="w-4 h-4 text-emerald-500" />
-            Funds have been released to the creator.
-          </p>
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 rounded-lg px-3 py-2.5">
+            <FiCheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+            <p className="text-sm text-emerald-800 dark:text-emerald-400 font-medium">
+              Funds for this milestone have been released to the creator. ✓
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -580,11 +474,15 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
 }
 
 // ─── MilestonePanel ───────────────────────────────────────────────────────────
-export default function MilestonePanel({ campaignId, creatorAddress, campaignRaisedAmount }) {
+// Issue 8: accepts campaignBudget (campaign.targetAmount) instead of the old
+// campaignRaisedAmount so waterfall bars stay stable after withdrawals.
+export default function MilestonePanel({ campaignId, creatorAddress, campaignBudget }) {
   const { address, useCampaignMilestones } = useContract();
   const { data: rawMilestones, isLoading } = useCampaignMilestones(campaignId);
   const isCreator = address?.toLowerCase() === creatorAddress?.toLowerCase();
-  const milestones = useWaterfallMilestones(rawMilestones, campaignRaisedAmount);
+
+  // Pass stable targetAmount budget to waterfall hook (Issue 8 fix)
+  const milestones = useWaterfallMilestones(rawMilestones, campaignBudget);
 
   if (isLoading) {
     return (

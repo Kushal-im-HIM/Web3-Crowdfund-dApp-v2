@@ -1,20 +1,13 @@
 /**
  * components/Dashboard/DashboardStats.js
  *
- * FIX Issue 4 — Ghost Campaign Counter:
- *   The previous version used `contractStats?.totalCampaigns` (which maps to
- *   `campaignCounter` on-chain) for the "Total Campaigns" stat. This counter
- *   never decrements — it includes all campaigns ever created, including the
- *   3 that the admin deactivated. So it would show "8" even though only 5
- *   are visible.
+ * Issue 1 — Platform fee renamed to "Anti-Spam Deposits" throughout.
+ *   EthosFund charges 0% platform fee. The only on-chain fee collected is the
+ *   0.0001 ETH anti-spam deposit required at campaign creation. Calling it a
+ *   "Platform Fee" contradicts the 0% fee marketing, so the stat is relabelled.
  *
- *   The fix: "Total Campaigns" now equals `campaigns?.length` — the count of
- *   campaigns actually returned by `getActiveCampaigns()`, which the contract
- *   already filters to `campaigns[i].active == true`. Deactivated entries are
- *   never included in this array, so the stat matches exactly what the user sees.
- *
- *   The raw `campaignCounter` (getContractStats) is retained for "Platform Fees"
- *   which is the only stat that correctly comes from that source.
+ * Issue 4 — "Total Campaigns" uses campaigns.length (active, non-deactivated)
+ *   not the raw campaignCounter which never decrements.
  */
 
 import { useContract } from "../../hooks/useContract";
@@ -43,9 +36,7 @@ export default function DashboardStats() {
       try {
         const ethValue = parseFloat(formatEther(campaign?.raisedAmount || 0));
         return sum + (isNaN(ethValue) ? 0 : ethValue);
-      } catch {
-        return sum;
-      }
+      } catch { return sum; }
     }, 0) ?? 0;
 
   const successfulCampaigns =
@@ -54,18 +45,13 @@ export default function DashboardStats() {
         const raised = parseFloat(formatEther(campaign?.raisedAmount || 0));
         const target = parseFloat(formatEther(campaign?.targetAmount || 0));
         return !isNaN(raised) && !isNaN(target) && target > 0 && raised >= target;
-      } catch {
-        return false;
-      }
+      } catch { return false; }
     }).length ?? 0;
 
   const totalBackers =
     campaigns?.reduce((sum, campaign) => {
-      try {
-        return sum + safeNumber(campaign?.contributorsCount);
-      } catch {
-        return sum;
-      }
+      try { return sum + safeNumber(campaign?.contributorsCount); }
+      catch { return sum; }
     }, 0) ?? 0;
 
   const activeCampaigns =
@@ -77,17 +63,15 @@ export default function DashboardStats() {
           parseFloat(formatEther(campaign?.targetAmount || 1));
         const expired = Number(campaign?.deadline) < now;
         return Boolean(campaign?.active) && !funded && !expired;
-      } catch {
-        return false;
-      }
+      } catch { return false; }
     }).length ?? 0;
 
-  // FIX Issue 4: use campaigns.length (only active/non-deactivated campaigns)
-  // NOT contractStats.totalCampaigns (which is the raw campaignCounter that
-  // includes deactivated entries and never decrements).
+  // Issue 4: campaigns.length (already filtered to active==true by contract)
   const totalCampaignsCount = campaigns?.length ?? 0;
 
-  const totalFeesAmount = contractStats?.totalFees || 0;
+  // Issue 1: renamed from "Platform Fees" — totalFeesCollected is the
+  // sum of 0.0001 ETH anti-spam deposits, NOT a percentage fee.
+  const totalDepositsAmount = contractStats?.totalFees || 0;
 
   const stats = [
     {
@@ -95,8 +79,6 @@ export default function DashboardStats() {
       value: totalCampaignsCount.toString(),
       icon: FiTarget,
       color: "primary",
-      // Subtitle clarifies this is the live, deactivation-aware count
-      subtitle: "Active (non-deactivated)",
     },
     {
       title: "Total Raised",
@@ -123,8 +105,9 @@ export default function DashboardStats() {
       color: "emerald",
     },
     {
-      title: "Platform Fees",
-      value: `${parseFloat(formatEther(totalFeesAmount)).toFixed(4)} ETH`,
+      // Issue 1: renamed — 0.0001 ETH anti-spam deposits, not platform revenue
+      title: "Anti-Spam Deposits",
+      value: `${parseFloat(formatEther(totalDepositsAmount)).toFixed(4)} ETH`,
       icon: FiTrendingUp,
       color: "cyan",
     },
