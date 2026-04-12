@@ -1,34 +1,37 @@
 /**
  * pages/campaigns/index.js
  *
- * Issue 2 — Accurate filter logic:
- *   Active    = deadline in future AND raisedAmount < targetAmount
- *   Completed = raisedAmount >= targetAmount AND campaign.withdrawn == true
- *               (for non-milestone campaigns)
- *               OR all milestones are Released/Refunded
- *               (for milestone campaigns)
- *               The key insight: "Completed" means money has actually LEFT the
- *               contract. Just being "funded" is not completed — the creator
- *               might not have withdrawn yet.
- *   All       = every non-deactivated campaign (getActiveCampaigns already
- *               filters active==true, so deactivated ones never appear).
+ * Filter fix — classify() updated to correctly identify milestone-based
+ * completed campaigns.
  *
- *   Rejected tab REMOVED per Issue 2. Failed/expired campaigns that didn't
- *   meet their goal are visible in the "All" tab for transparency but don't
- *   get their own filter — they are an implementation detail, not a
- *   user-facing category that helps people find campaigns to back.
+ * PROBLEM:
+ *   For milestone campaigns, campaign.withdrawn is NEVER set to true (each
+ *   milestone's funds are withdrawn individually via withdrawMilestoneFunds,
+ *   not the campaign's withdrawCampaignFunds). So the old check
+ *   `funded && withdrawn === true` never caught these as "completed".
+ *   They fell through to "active" or "funded_pending", which caused:
+ *   - Active tab: showing "Campaign Complete" campaigns (wrong)
+ *   - Completed tab: always empty even when campaigns finished (wrong)
  *
- * Issue 3 — URL query param persistence:
- *   Active tab is read from and written to ?filter=<tab> via Next.js router.
- *   Pressing Back from a campaign detail page restores the exact filter.
+ * FIX — three-signal classify():
+ *   Signal A: campaign.withdrawn === true → completed (non-milestone campaigns)
+ *   Signal B: raisedAmount === "0" AND contributorsCount > 0 → completed
+ *             (milestone campaigns where all funds were released: the contract
+ *             decremented raisedAmount to 0 through milestone withdrawals, but
+ *             contributors exist proving it was once funded)
+ *   Signal C: raisedAmount >= targetAmount AND !withdrawn → funded_pending
+ *             (fully funded but funds not yet released — visible in All only)
+ *   Signal D: deadline past AND underfunded → expired (visible in All only)
+ *   Signal E: deadline in future AND underfunded → active
+ *
+ * Issue 3: URL query param persistence (unchanged from previous version)
  */
 
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "../../components/Layout/Layout";
 import CampaignCard from "../../components/Campaign/CampaignCard";
 import { useContract } from "../../hooks/useContract";
-import { useState } from "react";
 import {
   FiSearch, FiFilter, FiGrid, FiList,
   FiCheckCircle, FiActivity,
@@ -45,13 +48,13 @@ const TABS = [
     key: "completed",
     label: "Completed",
     icon: FiCheckCircle,
-    desc: "Campaigns fully funded AND where funds have been released to the creator",
+    desc: "Campaigns fully funded AND where all funds have been released to the creator",
   },
   {
     key: "all",
     label: "All",
     icon: FiFilter,
-    desc: "Every campaign visible on EthosFund (excludes admin-deactivated campaigns)",
+    desc: "Every campaign on EthosFund (excludes admin-deactivated campaigns)",
   },
 ];
 
@@ -64,14 +67,12 @@ export default function CampaignsPage() {
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("newest");
 
-  // Issue 3: active tab driven by URL query param
+  // Issue 3: active tab driven by URL ?filter= param
   const filterFromUrl = router.query.filter;
   const activeTab = VALID_FILTERS.includes(filterFromUrl) ? filterFromUrl : DEFAULT_FILTER;
 
   const setActiveTab = (tab) => {
-    router.push({ pathname: router.pathname, query: { filter: tab } }, undefined, {
-      shallow: true,
-    });
+    router.push({ pathname: router.pathname, query: { filter: tab } }, undefined, { shallow: true });
   };
 
   useEffect(() => {
@@ -85,38 +86,39 @@ export default function CampaignsPage() {
   }, [router.isReady, filterFromUrl]);
 
   const { useActiveCampaigns } = useContract();
-  // getActiveCampaigns already filters active==true at the contract level
   const { data: campaigns, isLoading } = useActiveCampaigns(0, 100);
 
   const now = Math.floor(Date.now() / 1000);
 
   /**
-   * Issue 2 — classify():
-   *
-   * "completed" means funds have actually left the escrow contract.
-   *   • Non-milestone campaigns: campaign.withdrawn === true
-   *   • Milestone campaigns: we can't know milestone release state from
-   *     getActiveCampaigns alone (it doesn't include milestone data),
-   *     but campaign.withdrawn being true is the canonical signal that
-   *     at least the non-milestone withdrawal happened.
-   *     The simplest reliable rule without additional per-campaign calls:
-   *       funded AND withdrawn == true → completed
-   *       funded AND withdrawn == false → "funded" (show in All, not Completed)
-   *
-   * This fixes the old bug where any funded campaign (even ones where the
-   * creator hadn't touched the money yet) showed in Completed.
+   * classify() — categorise a campaign into one of these buckets:
+   *   "active"        → accepting contributions right now
+   *   "completed"     → all funds have left the contract (withdrawn or released)
+   *   "funded_pending"→ funded but funds not yet released (shown in All only)
+   *   "expired"       → deadline passed, goal not met (shown in All only)
    */
   const classify = (c) => {
-    const funded =
-      BigInt(c.raisedAmount?.toString() ?? "0") >=
-      BigInt(c.targetAmount?.toString() ?? "1");
+    const raisedBig = BigInt(c.raisedAmount?.toString() ?? "0");
+    const targetBig = BigInt(c.targetAmount?.toString() ?? "1");
+    const funded = raisedBig >= targetBig;
     const expired = Number(c.deadline) < now;
+    const withdrawn = Boolean(c.withdrawn);
+    const hasBackers = Number(c.contributorsCount ?? 0) > 0;
 
-    if (funded && Boolean(c.withdrawn)) return "completed";
-    // funded but not yet withdrawn — visible in All only
-    if (funded && !c.withdrawn) return "funded_pending";
-    // deadline passed, goal not met — visible in All only (no Rejected tab)
+    // Signal A: explicit withdrawal flag (non-milestone campaigns)
+    if (funded && withdrawn) return "completed";
+
+    // Signal B: raisedAmount is 0 but contributors exist
+    // → all milestone funds have been released (each withdrawal decremented raisedAmount)
+    if (raisedBig === 0n && hasBackers) return "completed";
+
+    // Signal C: funded but not yet released
+    if (funded && !withdrawn) return "funded_pending";
+
+    // Signal D: deadline passed, goal not met
     if (expired && !funded) return "expired";
+
+    // Signal E: live and accepting contributions
     return "active";
   };
 
@@ -140,39 +142,32 @@ export default function CampaignsPage() {
       .slice()
       .sort((a, b) => {
         switch (sortBy) {
-          case "newest":
-            return Number(b.createdAt) - Number(a.createdAt);
+          case "newest": return Number(b.createdAt) - Number(a.createdAt);
           case "ending": {
-            const aLeft = Number(a.deadline) - now;
-            const bLeft = Number(b.deadline) - now;
-            if (aLeft <= 0 && bLeft <= 0) return 0;
-            if (aLeft <= 0) return 1;
-            if (bLeft <= 0) return -1;
-            return aLeft - bLeft;
+            const aL = Number(a.deadline) - now;
+            const bL = Number(b.deadline) - now;
+            if (aL <= 0 && bL <= 0) return 0;
+            if (aL <= 0) return 1;
+            if (bL <= 0) return -1;
+            return aL - bL;
           }
-          case "funded":
-            return Number(b.raisedAmount) - Number(a.raisedAmount);
-          case "popular":
-            return Number(b.contributorsCount) - Number(a.contributorsCount);
-          default:
-            return 0;
+          case "funded": return Number(b.raisedAmount) - Number(a.raisedAmount);
+          case "popular": return Number(b.contributorsCount) - Number(a.contributorsCount);
+          default: return 0;
         }
       });
   }, [campaigns, activeTab, searchTerm, sortBy]);
 
-  // Issue 2 & Issue 4: counts derived from filtered active campaigns array only
+  // Counts for tab badges — derived from the filtered array only (no raw campaignCounter)
   const counts = useMemo(() => {
     if (!campaigns) return { active: 0, completed: 0, all: 0 };
-    return campaigns.reduce(
-      (acc, c) => {
-        const bucket = classify(c);
-        if (bucket === "active") acc.active += 1;
-        if (bucket === "completed") acc.completed += 1;
-        acc.all += 1;
-        return acc;
-      },
-      { active: 0, completed: 0, all: 0 }
-    );
+    return campaigns.reduce((acc, c) => {
+      const b = classify(c);
+      if (b === "active") acc.active += 1;
+      if (b === "completed") acc.completed += 1;
+      acc.all += 1;
+      return acc;
+    }, { active: 0, completed: 0, all: 0 });
   }, [campaigns]);
 
   return (
@@ -182,35 +177,19 @@ export default function CampaignsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              All Campaigns
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Discover and support projects on EthosFund
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">All Campaigns</h1>
+            <p className="text-gray-600 dark:text-gray-400">Discover and support projects on EthosFund</p>
           </div>
-
           <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
-                ? "bg-secondary-500 text-white shadow-emerald-glow"
-                : "bg-stone-100 dark:bg-primary-700 text-gray-600 dark:text-gray-400 hover:bg-stone-200 dark:hover:bg-primary-600"
-                }`}
-              title="Grid view"
-            >
-              <FiGrid className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`p-2 rounded-lg transition-colors ${viewMode === "list"
-                ? "bg-secondary-500 text-white shadow-emerald-glow"
-                : "bg-stone-100 dark:bg-primary-700 text-gray-600 dark:text-gray-400 hover:bg-stone-200 dark:hover:bg-primary-600"
-                }`}
-              title="List view"
-            >
-              <FiList className="w-5 h-5" />
-            </button>
+            {[["grid", FiGrid, "Grid view"], ["list", FiList, "List view"]].map(([mode, Icon, title]) => (
+              <button key={mode} onClick={() => setViewMode(mode)} title={title}
+                className={`p-2 rounded-lg transition-colors ${viewMode === mode
+                  ? "bg-secondary-500 text-white shadow-emerald-glow"
+                  : "bg-stone-100 dark:bg-primary-700 text-gray-600 dark:text-gray-400 hover:bg-stone-200 dark:hover:bg-primary-600"
+                  }`}>
+                <Icon className="w-5 h-5" />
+              </button>
+            ))}
           </div>
         </div>
 
@@ -220,24 +199,17 @@ export default function CampaignsPage() {
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const count = counts[tab.key] ?? 0;
-              const isActive = activeTab === tab.key;
+              const isSel = activeTab === tab.key;
               return (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition-colors border-b-2 -mb-px ${isActive
+                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition-colors border-b-2 -mb-px ${isSel
                       ? "border-secondary-500 text-secondary-600 dark:text-secondary-400 bg-secondary-50/50 dark:bg-secondary-900/10"
                       : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-stone-50 dark:hover:bg-primary-700/50"
-                    }`}
-                >
+                    }`}>
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isActive
-                      ? "bg-secondary-500 text-white"
-                      : "bg-stone-200 dark:bg-primary-600 text-gray-600 dark:text-gray-300"
-                    }`}>
-                    {count}
-                  </span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isSel ? "bg-secondary-500 text-white" : "bg-stone-200 dark:bg-primary-600 text-gray-600 dark:text-gray-300"
+                    }`}>{count}</span>
                 </button>
               );
             })}
@@ -252,19 +224,13 @@ export default function CampaignsPage() {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search campaigns..."
-                value={searchTerm}
+              <input type="text" placeholder="Search campaigns..." value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-stone-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 outline-none bg-white dark:bg-primary-700 dark:text-white text-gray-900"
               />
             </div>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-3 border border-stone-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 outline-none bg-white dark:bg-primary-700 dark:text-white text-gray-900"
-            >
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+              className="px-4 py-3 border border-stone-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 outline-none bg-white dark:bg-primary-700 dark:text-white text-gray-900">
               <option value="newest">Newest First</option>
               <option value="ending">Ending Soon</option>
               <option value="funded">Most Funded</option>
@@ -291,11 +257,8 @@ export default function CampaignsPage() {
               : "space-y-4"
             }>
               {processedCampaigns.map((campaign) => (
-                <CampaignCard
-                  key={campaign.id}
-                  campaign={campaign}
-                  className={viewMode === "list" ? "flex-row" : ""}
-                />
+                <CampaignCard key={campaign.id} campaign={campaign}
+                  className={viewMode === "list" ? "flex-row" : ""} />
               ))}
             </div>
           ) : (
@@ -314,10 +277,8 @@ export default function CampaignsPage() {
                       : "No campaigns found."}
               </p>
               {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm("")}
-                  className="mt-4 text-secondary-600 dark:text-secondary-400 text-sm font-semibold hover:underline"
-                >
+                <button onClick={() => setSearchTerm("")}
+                  className="mt-4 text-secondary-600 dark:text-secondary-400 text-sm font-semibold hover:underline">
                   Clear search
                 </button>
               )}

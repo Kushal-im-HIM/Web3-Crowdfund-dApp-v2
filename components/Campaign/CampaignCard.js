@@ -322,16 +322,16 @@ export default function CampaignCard({ campaign, className = "" }) {
               View Campaign
             </button>
           ) : cardState === "releasing" ? (
-            /* BUG FIX 2: Locked amber button for in-execution campaigns */
-            <button disabled className="w-full flex items-center justify-center gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-semibold py-3 rounded-lg border-2 border-amber-300 dark:border-amber-700 cursor-not-allowed">
+            /* In execution: funds partially released, page still navigable */
+            <button className="w-full flex items-center justify-center gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-semibold py-3 rounded-lg border-2 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
               <FiLock className="w-4 h-4" />
-              Funding Closed
+              View Campaign
             </button>
           ) : cardState === "funded" ? (
-            /* Original mandate 1: emerald locked for funded state */
-            <button disabled className="w-full flex items-center justify-center gap-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold py-3 rounded-lg border border-emerald-300 dark:border-emerald-700 cursor-not-allowed select-none">
+            /* Funded: no new contributions, but page is still navigable (creator withdraws here) */
+            <button className="w-full flex items-center justify-center gap-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold py-3 rounded-lg border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors">
               <FiLock className="w-4 h-4" />
-              Funding Closed
+              View Campaign
             </button>
           ) : cardState === "setup-needed" ? (
             /* BUG FIX 1: Amber locked — milestones not ready */

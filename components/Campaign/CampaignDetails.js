@@ -389,8 +389,8 @@ export default function CampaignDetails({ campaignId }) {
                   <div className="flex justify-between text-sm mb-1.5">
                     <span className="font-medium text-gray-700 dark:text-gray-300">Progress</span>
                     <span className={`font-bold ${heroState === "complete" ? "text-slate-500 dark:text-slate-400"
-                        : isClosedForContributions ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-gray-900 dark:text-white"
+                      : isClosedForContributions ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-gray-900 dark:text-white"
                       }`}>
                       {progressDisplay === 100 ? "100%" : `${progress.toFixed(1)}%`}
                     </span>
@@ -588,7 +588,7 @@ export default function CampaignDetails({ campaignId }) {
           <MilestonePanel
             campaignId={campaignId}
             creatorAddress={campaign.creator}
-            campaignBudget={campaign.targetAmount}
+            campaignRaisedAmount={campaign.raisedAmount}
           />
         )}
 

@@ -261,7 +261,7 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[
             { label: "Total Campaigns", value: totalCampaigns, icon: FiActivity, color: "secondary" },
-            { label: "Platform Fees", value: `${availableFees} ETH`, icon: FiDollarSign, color: "tertiary" },
+            { label: "Anti-Spam Deposits", value: `${availableFees} ETH`, icon: FiDollarSign, color: "tertiary" },
             { label: "Contract Balance", value: `${contractBalance} ETH`, icon: FiShield, color: "accent" },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
@@ -299,9 +299,9 @@ export default function AdminPage() {
         {/* Admin Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-          {/* Fee Management */}
+          {/* Deposit Management */}
           <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Fee Management</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Deposit Management</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -320,7 +320,7 @@ export default function AdminPage() {
                 disabled={isWithdrawing || !withdrawAmount}
                 className="w-full bg-gradient-emerald hover:shadow-emerald-glow disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none text-white font-medium py-3 rounded-lg transition-all duration-300 disabled:cursor-not-allowed"
               >
-                {isWithdrawing ? "Withdrawing..." : "Withdraw Fees"}
+                {isWithdrawing ? "Withdrawing..." : "Withdraw Deposits"}
               </button>
             </div>
           </div>
@@ -333,8 +333,8 @@ export default function AdminPage() {
                 onClick={handlePauseContract}
                 disabled={isPausing || isUnpausing}
                 className={`w-full font-medium py-3 rounded-lg transition-all duration-300 inline-flex items-center justify-center disabled:cursor-not-allowed disabled:bg-gray-400 disabled:text-white ${isPaused
-                    ? "bg-gradient-emerald hover:shadow-emerald-glow text-white"
-                    : "bg-orange-500 hover:bg-orange-600 text-white"
+                  ? "bg-gradient-emerald hover:shadow-emerald-glow text-white"
+                  : "bg-orange-500 hover:bg-orange-600 text-white"
                   }`}
               >
                 {isPausing || isUnpausing ? "Processing..." : isPaused
@@ -396,8 +396,8 @@ export default function AdminPage() {
               </div>
             </div>
             <div>
-              <span className="text-gray-600 dark:text-gray-400">Creation Fee:</span>
-              <div className="text-gray-900 dark:text-white mt-1">0.0001 ETH</div>
+              <span className="text-gray-600 dark:text-gray-400">Anti-Spam Deposit:</span>
+              <div className="text-gray-900 dark:text-white mt-1">0.0001 ETH (anti-spam only)</div>
             </div>
             <div>
               <span className="text-gray-600 dark:text-gray-400">Status:</span>

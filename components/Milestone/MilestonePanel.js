@@ -1,27 +1,31 @@
 /**
  * components/Milestone/MilestonePanel.js
  *
- * Issue 6 — Remove voting window countdown.
- *   The 7-day voting window runs from the MILESTONE deadline, not the campaign
- *   deadline. Showing a countdown like "Voting closes in 6d 23h" is misleading
- *   because it doesn't align with the campaign deadline the user set. Instead
- *   we show a simple status label: "Voting in progress" or "Window expired —
- *   ready to finalize." No live timer.
+ * FIX — Vote button UI bugs:
  *
- * Issue 7 — Campaign owner can trigger Finalize Vote after window expires.
- *   Scenario: 4 donors, deadline over, campaign fully funded, only 3 voted.
- *   The 4th donor didn't vote. With our contract fix (_tryResolveByVote only
- *   auto-resolves at 100% participation), the milestone stays Submitted forever
- *   until someone calls finalizeVoting(). The creator (campaign owner) is the
- *   most motivated person to do this — they can't withdraw funds until the
- *   milestone is Approved. A prominent "Settle Vote & Unlock Funds" button now
- *   appears for the creator once the voting window has expired.
+ *   Bug A: Both Approve AND Reject show "Submitting…" when either is clicked.
+ *     CAUSE: Both buttons read the same wagmi `isLoading` flag from
+ *     `useVoteMilestone()` — one flag controls two buttons.
+ *     FIX: Local state `votingDirection` ('approve' | 'reject' | null)
+ *     tracks WHICH button was pressed. Only the pressed button shows the
+ *     spinner; the other is simply disabled.
  *
- * Issue 8 — Accept campaignBudget prop (campaign.targetAmount, stable).
- *   CampaignDetails now passes `campaignBudget={campaign.targetAmount}` instead
- *   of the old `campaignRaisedAmount`. The hook useWaterfallMilestones uses
- *   targetAmount as the stable distribution budget so bars don't collapse after
- *   withdrawals. This component forwards that prop to the hook.
+ *   Bug B: Buttons briefly re-appear during the MetaMask confirmation queue.
+ *     CAUSE: wagmi's `isLoading` goes false briefly after MetaMask opens but
+ *     before the block confirms, so the guard `!voting` temporarily passes
+ *     and buttons become clickable again.
+ *     FIX: `voteSubmitted` is a local boolean set to true on first click and
+ *     only reset on error (so the user can retry). It never flickers false
+ *     during the MetaMask pending phase.
+ *
+ *   Bug C: Same re-appearance issue applies to other action buttons.
+ *     FIX: All action buttons (Withdraw, Claim Refund, Finalize Vote,
+ *     Submit Evidence) now use a `pendingAction` local state that gets set
+ *     on click and cleared on error, giving the same stable lock behaviour.
+ *
+ * FIX — Waterfall prop:
+ *   Accepts `campaignRaisedAmount` (not the old `campaignBudget`) so the
+ *   corrected useWaterfallMilestones hook gets the right value.
  */
 
 import { useState, useRef } from "react";
@@ -31,7 +35,7 @@ import { toast } from "react-hot-toast";
 import {
   FiUpload, FiExternalLink, FiCheckCircle, FiXCircle,
   FiClock, FiUsers, FiFlag, FiArrowDown, FiAlertCircle,
-  FiZap, FiInfo,
+  FiZap, FiInfo, FiLoader,
 } from "react-icons/fi";
 import { uploadToIPFS } from "../../utils/ipfs";
 import { useContract } from "../../hooks/useContract";
@@ -39,7 +43,6 @@ import { useWaterfallMilestones } from "../../hooks/useWaterfallMilestones";
 import { STATUS_LABELS } from "../../constants";
 
 const IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
-// Must match the contract's default votingWindowSeconds
 const VOTING_WINDOW_SECONDS = 7 * 24 * 3600;
 
 const IPFS_REGEX = /^(Qm[a-zA-Z0-9]{44}|b[a-zA-Z0-9]{40,})$/;
@@ -83,17 +86,27 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
   const { data: myContrib } = useMyMilestoneContribution(campaignId, milestone.id);
   const { data: myVoteData } = useMyMilestoneVote(campaignId, milestone.id);
 
-  const errHandler = (ctx) => (err) => {
-    toast.error(`${ctx}: ${extractRevertReason(err)}`, { duration: 6000 });
-    console.error(`[MilestonePanel:${ctx}]`, err);
-  };
+  // ── wagmi write hooks ─────────────────────────────────────────────────────
+  const { write: submitEv, isLoading: wagmiSubmitting } = useSubmitEvidence();
+  const { write: vote, isLoading: wagmiVoting } = useVoteMilestone();
+  const { write: withdraw, isLoading: wagmiWithdrawing } = useWithdrawMilestone();
+  const { write: claimRefund, isLoading: wagmiRefunding } = useClaimMilestoneRefund();
+  const { write: finalizeVote, isLoading: wagmiFinalizing } = useFinalizeVoting();
 
-  const { write: submitEv, isLoading: submitting } = useSubmitEvidence();
-  const { write: vote, isLoading: voting } = useVoteMilestone();
-  const { write: withdraw, isLoading: withdrawing } = useWithdrawMilestone();
-  const { write: claimRefund, isLoading: refunding } = useClaimMilestoneRefund();
-  const { write: finalizeVote, isLoading: finalizing } = useFinalizeVoting();
+  // ── FIX Bug B: local "pending action" state ───────────────────────────────
+  // Set to true immediately on click; only cleared on tx error.
+  // This prevents buttons from briefly re-appearing during the MetaMask
+  // confirmation queue phase (when wagmi's isLoading temporarily dips to false).
 
+  // FIX Bug A: track which vote direction was pressed (approve / reject / null)
+  const [votingDirection, setVotingDirection] = useState(null);
+  const [voteSubmitted, setVoteSubmitted] = useState(false);
+  const [withdrawPending, setWithdrawPending] = useState(false);
+  const [refundPending, setRefundPending] = useState(false);
+  const [finalizePending, setFinalizePending] = useState(false);
+  const [evPending, setEvPending] = useState(false);
+
+  // Evidence form state
   const [ipfsHashManual, setIpfsHashManual] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [evidenceFile, setEvidenceFile] = useState(null);
@@ -109,10 +122,20 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
   const hasContributed = myContrib && BigInt(myContrib.toString()) > 0n;
   const hasVoted = myVoteData?.hasVoted === true;
 
-  // Issue 6: no live countdown — just a boolean for state branching
   const now = Math.floor(Date.now() / 1000);
   const votingWindowEnd = Number(milestone.deadline) + VOTING_WINDOW_SECONDS;
   const votingWindowExpired = now >= votingWindowEnd;
+
+  // Effective loading state: local pending flag OR wagmi isLoading
+  const isWithdrawing = withdrawPending || wagmiWithdrawing;
+  const isRefunding = refundPending || wagmiRefunding;
+  const isFinalizing = finalizePending || wagmiFinalizing;
+  const isSubmittingEv = evPending || wagmiSubmitting;
+
+  // FIX Bug A: each button uses its own effective "is this one loading" check
+  const isVotingFor = voteSubmitted && votingDirection === "approve";
+  const isVotingAgainst = voteSubmitted && votingDirection === "reject";
+  const eitherVoting = voteSubmitted; // disables both once either is clicked
 
   // Vote tallies
   const votesFor = BigInt((milestone.totalVotesFor || 0).toString());
@@ -122,32 +145,59 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
     ? Math.round((Number(votesFor) * 100) / Number(totalVotesWei))
     : 0;
 
-  // ── Pre-flight vote guard ─────────────────────────────────────────────────
+  // ── Error handler factory ─────────────────────────────────────────────────
+  const errHandler = (ctx, resetFn) => (err) => {
+    toast.error(`${ctx}: ${extractRevertReason(err)}`, { duration: 6000 });
+    console.error(`[MilestonePanel:${ctx}]`, err);
+    if (resetFn) resetFn();
+  };
+
+  // ── FIX Bug A + B: handleVote ─────────────────────────────────────────────
   const handleVote = (inFavour) => {
+    // Pre-flight checks — surface friendly toasts, never open MetaMask needlessly
     if (statusLabel !== "Submitted") {
       const msgs = {
         Approved: "✅ This milestone was already approved.",
         Rejected: "❌ This milestone was rejected — you can claim a refund.",
-        Pending: "Evidence hasn't been submitted yet. Voting hasn't started.",
+        Pending: "Evidence hasn't been submitted yet.",
       };
       toast(msgs[statusLabel] || `Voting is not open (status: ${statusLabel}).`, { icon: "ℹ️", duration: 5000 });
       return;
     }
     if (votingWindowExpired) {
-      toast.error('The voting window has closed. Use "Settle Vote" to finalise this milestone.', { duration: 6000 });
+      toast.error('The voting window has closed. Use "Settle Vote" below to finalise.');
       return;
     }
-    if (hasVoted) { toast("You have already cast your vote.", { icon: "ℹ️" }); return; }
-    if (!hasContributed) { toast.error("Only contributors can vote."); return; }
+    if (hasVoted || voteSubmitted) {
+      toast("You have already cast your vote on this milestone.", { icon: "ℹ️" });
+      return;
+    }
+    if (!hasContributed) {
+      toast.error("Only contributors can vote.");
+      return;
+    }
 
-    vote({ args: [campaignId, milestone.id, inFavour], onError: errHandler("Vote") });
+    // FIX Bug A: set direction BEFORE calling wagmi so the correct button shows spinner
+    const dir = inFavour ? "approve" : "reject";
+    setVotingDirection(dir);
+    // FIX Bug B: set submitted flag immediately — prevents re-appearance during MetaMask queue
+    setVoteSubmitted(true);
+
+    vote({
+      args: [campaignId, milestone.id, inFavour],
+      onError: errHandler("Vote", () => {
+        // On error: reset so user can retry
+        setVoteSubmitted(false);
+        setVotingDirection(null);
+      }),
+    });
   };
 
   // ── Evidence validation ───────────────────────────────────────────────────
   const validateEvidence = (hash, url) => {
     let ok = true;
     if (hash.trim() && !IPFS_REGEX.test(hash.trim())) {
-      setIpfsError("Invalid IPFS hash — CIDv0 (Qm…, 46 chars) or CIDv1 (b…, 41+ chars)."); ok = false;
+      setIpfsError("Invalid IPFS hash — CIDv0 (Qm…) or CIDv1 (b…)."); ok = false;
     } else { setIpfsError(""); }
     if (url.trim() && !GITHUB_REGEX.test(url.trim())) {
       setUrlError("Must be a valid GitHub URL — e.g. https://github.com/user/repo"); ok = false;
@@ -179,9 +229,17 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
     }
     if (!finalHash && !url) return toast.error("Provide an IPFS hash or a GitHub evidence URL.");
 
-    submitEv({ args: [campaignId, milestone.id, finalHash, url], onError: errHandler("Submit Evidence") });
-    setShowEvForm(false); setIpfsHashManual(""); setEvidenceUrl("");
+    setEvPending(true);
+    submitEv({
+      args: [campaignId, milestone.id, finalHash, url],
+      onError: errHandler("Submit Evidence", () => setEvPending(false)),
+    });
+    setShowEvForm(false);
+    setIpfsHashManual("");
+    setEvidenceUrl("");
   };
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="border border-slate-200 dark:border-slate-700/40 rounded-xl p-5 mb-4 bg-white dark:bg-slate-800/30 shadow-sm">
@@ -206,12 +264,10 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
 
       <p className="text-slate-700 dark:text-slate-400 text-sm mb-4 leading-relaxed pl-7">{milestone.description}</p>
 
-      {/* Progress bar — Issue 8: uses stable waterfall from targetAmount */}
+      {/* Progress bar */}
       <div className="space-y-1 mb-4">
         <div className="flex justify-between text-xs">
-          <span className="text-slate-700 dark:text-slate-400 font-medium">
-            {fmtBigInt(waterfallRaised)} ETH raised
-          </span>
+          <span className="text-slate-700 dark:text-slate-400 font-medium">{fmtBigInt(waterfallRaised)} ETH raised</span>
           <span className="text-slate-500">
             Target: {fmt(milestone.targetAmount)} ETH ·{" "}
             <span className={`font-semibold ${waterfallPercent === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-700 dark:text-slate-300"}`}>
@@ -260,7 +316,7 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
             <span className="flex items-center gap-1"><FiXCircle className="w-3 h-3 text-red-400" />{fmtBigInt(votesAgainst)} ETH Against</span>
           </div>
           <p className="text-[10px] text-slate-400 mt-1.5 italic">
-            Settled when window expires (anyone calls Finalize Vote) or when all campaign stake has voted.
+            Settled when window expires (Finalize Vote) or when all campaign stake has voted.
           </p>
         </div>
       )}
@@ -274,12 +330,11 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
             <FiArrowDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <p className="text-xs text-emerald-800 dark:text-emerald-400 leading-relaxed">
               To fund this milestone, use the <strong>Contribute Now</strong> button at the top of the page.
-              Funds fill milestones automatically in sequence.
             </p>
           </div>
         )}
 
-        {/* Submitted: not a contributor */}
+        {/* Submitted: no contribution */}
         {statusLabel === "Submitted" && !isCreator && !hasContributed && (
           <p className="text-xs text-slate-500 dark:text-slate-400 flex items-start gap-1.5">
             <FiAlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
@@ -287,40 +342,65 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           </p>
         )}
 
-        {/* Submitted: voting info for contributor */}
-        {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && !votingWindowExpired && (
+        {/* Submitted: contributor info blurb */}
+        {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && !voteSubmitted && !votingWindowExpired && (
           <div className="flex items-start gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 dark:bg-slate-800/60 dark:border-slate-700/40 rounded-lg">
             <FiInfo className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
             <p className="text-[11px] text-slate-500 leading-relaxed">
               Your vote is weighted by your ETH contribution (<strong>{fmt(myContrib)} ETH</strong>).
-              Votes stay open until the 7-day window closes. The result is settled when anyone calls
-              <strong> Finalize Vote</strong> after expiry, or immediately if all campaign stake has voted.
+              The result settles when the 7-day window closes via <strong>Finalize Vote</strong>,
+              or immediately if all campaign stake has voted.
             </p>
           </div>
         )}
 
-        {/* Submitted: vote buttons */}
-        {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && !votingWindowExpired && (
+        {/*
+          FIX Bug A + B: Vote buttons
+          - votingDirection controls WHICH button shows the spinner
+          - eitherVoting (voteSubmitted) disables BOTH once either is clicked
+          - Buttons stay disabled even during MetaMask queue (no brief re-appearance)
+        */}
+        {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && !voteSubmitted && !votingWindowExpired && (
           <div>
             <p className="text-xs text-slate-600 dark:text-slate-500 mb-2">
               Cast your DAO vote ({fmt(myContrib)} ETH weight):
             </p>
             <div className="flex gap-2">
-              <button disabled={voting} onClick={() => handleVote(true)}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed">
-                <FiCheckCircle className="w-3.5 h-3.5" />
-                {voting ? "Submitting…" : "Approve"}
+              {/* Approve button */}
+              <button
+                disabled={eitherVoting}
+                onClick={() => handleVote(true)}
+                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed min-w-[100px] justify-center"
+              >
+                {isVotingFor
+                  ? <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Submitting…</>
+                  : <><FiCheckCircle className="w-3.5 h-3.5" /> Approve</>
+                }
               </button>
-              <button disabled={voting} onClick={() => handleVote(false)}
-                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed">
-                <FiXCircle className="w-3.5 h-3.5" />
-                {voting ? "Submitting…" : "Reject"}
+              {/* Reject button */}
+              <button
+                disabled={eitherVoting}
+                onClick={() => handleVote(false)}
+                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed min-w-[100px] justify-center"
+              >
+                {isVotingAgainst
+                  ? <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Submitting…</>
+                  : <><FiXCircle className="w-3.5 h-3.5" /> Reject</>
+                }
               </button>
             </div>
           </div>
         )}
 
-        {/* Submitted: already voted */}
+        {/* Submitted: vote pending in queue (neither confirmed nor errored yet) */}
+        {statusLabel === "Submitted" && !isCreator && hasContributed && voteSubmitted && !hasVoted && (
+          <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+            <FiLoader className="w-4 h-4 animate-spin text-emerald-500" />
+            Vote submitted — waiting for block confirmation…
+          </p>
+        )}
+
+        {/* Submitted: vote confirmed on chain */}
         {statusLabel === "Submitted" && !isCreator && hasContributed && hasVoted && (
           <p className="text-sm text-slate-700 dark:text-slate-400 flex items-center gap-1.5">
             <FiCheckCircle className="w-4 h-4 text-emerald-500" />
@@ -328,8 +408,8 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           </p>
         )}
 
-        {/* Submitted: window expired, contributor didn't vote */}
-        {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && votingWindowExpired && (
+        {/* Submitted: window expired, contributor missed voting */}
+        {statusLabel === "Submitted" && !isCreator && hasContributed && !hasVoted && !voteSubmitted && votingWindowExpired && (
           <div className="flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800 rounded-lg">
             <FiAlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
             <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
@@ -338,51 +418,54 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           </div>
         )}
 
-        {/*
-          Issue 7 — "Settle Vote & Unlock Funds" for the CREATOR.
-          After the voting window expires with less than 100% participation,
-          the milestone stays Submitted. The creator cannot withdraw until it
-          reaches Approved. This button lets them (or anyone) call finalizeVoting()
-          which resolves based on accumulated stake-weighted votes.
-          Shown prominently for the creator because they are most motivated.
-        */}
+        {/* Finalize Vote — after window expiry, any connected user */}
         {statusLabel === "Submitted" && votingWindowExpired && address && (
           <div>
             {isCreator && (
               <p className="text-xs text-amber-700 dark:text-amber-400 mb-2 flex items-start gap-1.5">
                 <FiAlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                The voting window has expired. Settle the vote to determine the outcome
-                and unlock fund withdrawal if approved.
+                The voting window expired. Settle the vote to unlock fund withdrawal if approved.
               </p>
             )}
             <button
-              disabled={finalizing}
-              onClick={() => finalizeVote({
-                args: [campaignId, milestone.id],
-                onError: errHandler("Finalize Vote"),
-              })}
+              disabled={finalizePending || wagmiFinalizing}
+              onClick={() => {
+                setFinalizePending(true);
+                finalizeVote({
+                  args: [campaignId, milestone.id],
+                  onError: errHandler("Finalize Vote", () => setFinalizePending(false)),
+                });
+              }}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed ${isCreator
                   ? "bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white"
                   : "bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white"
                 }`}
             >
-              <FiZap className="w-3.5 h-3.5" />
-              {finalizing
-                ? "Settling…"
-                : isCreator
-                  ? "Settle Vote & Unlock Funds"
-                  : "Finalize Vote"
+              {isFinalizing
+                ? <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Settling…</>
+                : <><FiZap className="w-3.5 h-3.5" /> {isCreator ? "Settle Vote & Unlock Funds" : "Finalize Vote"}</>
               }
             </button>
           </div>
         )}
 
-        {/* Claim Refund — ONLY on Rejected */}
+        {/* Claim Refund — ONLY on Rejected, never during Submitted */}
         {statusLabel === "Rejected" && !isCreator && hasContributed && (
-          <button disabled={refunding}
-            onClick={() => claimRefund({ args: [campaignId, milestone.id], onError: errHandler("Claim Refund") })}
-            className="bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed">
-            {refunding ? "Processing…" : "Claim Refund"}
+          <button
+            disabled={refundPending || wagmiRefunding}
+            onClick={() => {
+              setRefundPending(true);
+              claimRefund({
+                args: [campaignId, milestone.id],
+                onError: errHandler("Claim Refund", () => setRefundPending(false)),
+              });
+            }}
+            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed"
+          >
+            {isRefunding
+              ? <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Processing…</>
+              : "Claim Refund"
+            }
           </button>
         )}
 
@@ -427,10 +510,10 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
                 </div>
 
                 <div className="flex gap-2 pt-1">
-                  <button disabled={submitting || uploadingEv || hasValidationErrors} onClick={handleEvidenceSubmit}
-                    title={hasValidationErrors ? "Fix errors above before submitting" : undefined}
+                  <button disabled={isSubmittingEv || uploadingEv || hasValidationErrors} onClick={handleEvidenceSubmit}
+                    title={hasValidationErrors ? "Fix errors above first" : undefined}
                     className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-400 text-white py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed">
-                    {uploadingEv ? "Uploading to IPFS…" : submitting ? "Submitting…" : "Submit to Blockchain"}
+                    {uploadingEv ? "Uploading to IPFS…" : isSubmittingEv ? "Submitting…" : "Submit to Blockchain"}
                   </button>
                   <button onClick={() => { setShowEvForm(false); setIpfsError(""); setUrlError(""); }}
                     className="px-4 py-2 rounded-lg text-sm border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
@@ -442,7 +525,7 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
           </div>
         )}
 
-        {/* Creator: waiting for verdict, voting in progress */}
+        {/* Creator: waiting for verdict */}
         {isCreator && statusLabel === "Submitted" && !votingWindowExpired && (
           <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
             <FiClock className="w-4 h-4" />
@@ -452,14 +535,25 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
 
         {/* Creator: withdraw on Approved */}
         {isCreator && statusLabel === "Approved" && !milestone.fundsReleased && (
-          <button disabled={withdrawing}
-            onClick={() => withdraw({ args: [campaignId, milestone.id], onError: errHandler("Withdraw") })}
-            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-400 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed">
-            {withdrawing ? "Releasing…" : "Withdraw Milestone Funds"}
+          <button
+            disabled={withdrawPending || wagmiWithdrawing}
+            onClick={() => {
+              setWithdrawPending(true);
+              withdraw({
+                args: [campaignId, milestone.id],
+                onError: errHandler("Withdraw", () => setWithdrawPending(false)),
+              });
+            }}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-400 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed"
+          >
+            {isWithdrawing
+              ? <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Releasing…</>
+              : "Withdraw Milestone Funds"
+            }
           </button>
         )}
 
-        {/* Released — Issue 8: show a clear confirmation banner */}
+        {/* Released */}
         {statusLabel === "Released" && (
           <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 rounded-lg px-3 py-2.5">
             <FiCheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -474,15 +568,12 @@ function MilestoneCard({ milestone, campaignId, isCreator, index }) {
 }
 
 // ─── MilestonePanel ───────────────────────────────────────────────────────────
-// Issue 8: accepts campaignBudget (campaign.targetAmount) instead of the old
-// campaignRaisedAmount so waterfall bars stay stable after withdrawals.
-export default function MilestonePanel({ campaignId, creatorAddress, campaignBudget }) {
+export default function MilestonePanel({ campaignId, creatorAddress, campaignRaisedAmount }) {
   const { address, useCampaignMilestones } = useContract();
   const { data: rawMilestones, isLoading } = useCampaignMilestones(campaignId);
   const isCreator = address?.toLowerCase() === creatorAddress?.toLowerCase();
-
-  // Pass stable targetAmount budget to waterfall hook (Issue 8 fix)
-  const milestones = useWaterfallMilestones(rawMilestones, campaignBudget);
+  // Pass raisedAmount to hook — the hook adds back released amounts internally
+  const milestones = useWaterfallMilestones(rawMilestones, campaignRaisedAmount);
 
   if (isLoading) {
     return (
