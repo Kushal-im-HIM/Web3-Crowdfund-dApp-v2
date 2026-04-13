@@ -36,6 +36,7 @@ import { useRouter } from "next/router";
 import { useEffect, useMemo } from "react";
 import Layout from "../components/Layout/Layout";
 import DashboardStats from "../components/Dashboard/DashboardStats";
+import TopContributors from "../components/Dashboard/TopContributors";
 import CampaignCard from "../components/Campaign/CampaignCard";
 import { useContract } from "../hooks/useContract";
 import { useNetworkContracts } from "../hooks/useNetworkContracts";
@@ -99,7 +100,7 @@ function RecentActivity({ contributions, campaigns, networkName, isLoading }) {
     return (
       <div className="space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-14 bg-stone-100 dark:bg-primary-700 rounded-lg animate-pulse" />
+          <div key={i} className="h-14 bg-emerald-100 dark:bg-primary-700 rounded-lg animate-pulse" />
         ))}
       </div>
     );
@@ -112,7 +113,7 @@ function RecentActivity({ contributions, campaigns, networkName, isLoading }) {
         {contributionItems.map((event, i) => (
           <div
             key={i}
-            className="flex items-center space-x-4 p-4 bg-stone-50 dark:bg-primary-900/50 rounded-lg border border-stone-100 dark:border-primary-700 hover:bg-stone-100 dark:hover:bg-primary-700/30 transition-colors"
+            className="flex items-center space-x-4 p-4 bg-emerald-50 dark:bg-primary-900/50 rounded-lg border border-emerald-100 dark:border-primary-700 hover:bg-slate-100 dark:hover:bg-primary-700/30 transition-colors"
           >
             <div className="w-2.5 h-2.5 rounded-full bg-secondary-500 flex-shrink-0 animate-pulse" />
             <div className="flex-1 min-w-0">
@@ -157,7 +158,7 @@ function RecentActivity({ contributions, campaigns, networkName, isLoading }) {
         {campaignItems.map(({ campaign, raisedEth, targetEth, funded, date }) => (
           <div
             key={campaign.id}
-            className="flex items-center space-x-4 p-4 bg-stone-50 dark:bg-primary-900/50 rounded-lg border border-stone-100 dark:border-primary-700 hover:bg-stone-100 dark:hover:bg-primary-700/30 transition-colors"
+            className="flex items-center space-x-4 p-4 bg-emerald-50 dark:bg-primary-900/50 rounded-lg border border-emerald-100 dark:border-primary-700 hover:bg-slate-100 dark:hover:bg-primary-700/30 transition-colors"
           >
             <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${funded ? "bg-emerald-500" : "bg-secondary-400"}`} />
             <div className="flex-1 min-w-0">
@@ -253,7 +254,7 @@ function Dashboard() {
       <Layout>
         <div className="flex items-center justify-center min-h-96">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-2xl font-bold font-display text-slate-900 dark:text-white mb-4 section-heading-accent">
               Connect Your Wallet
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
@@ -276,8 +277,8 @@ function Dashboard() {
             <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-accent-200 dark:bg-accent-900 rounded-full opacity-20 blur-3xl" />
           </div>
           <div className="max-w-3xl relative z-10">
-            <h1 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
-              Welcome to the Ethos Console 👋
+            <h1 className="text-3xl font-bold mb-2 font-display text-slate-900 dark:text-white">
+              Welcome to the Ethos Console 🌿
             </h1>
             <p className="text-gray-700 dark:text-gray-300 text-lg mb-6">
               Discover amazing projects, support innovative ideas, or launch your own campaign.
@@ -301,7 +302,7 @@ function Dashboard() {
 
         {/* EthosFund Statistics */}
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+          <h2 className="text-2xl font-bold font-display text-slate-900 dark:text-white mb-6 section-heading-accent">
             EthosFund Statistics
           </h2>
           <DashboardStats />
@@ -309,11 +310,11 @@ function Dashboard() {
 
         {/* Quick Stats for the connected user */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-stone-100 dark:border-primary-700">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">My Campaigns</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold font-display text-slate-900 dark:text-white">
                   {userCampaigns?.length || 0}
                 </p>
               </div>
@@ -323,11 +324,11 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-stone-100 dark:border-primary-700">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">My Contributions</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold font-display text-slate-900 dark:text-white">
                   {userContributions?.length || 0}
                 </p>
               </div>
@@ -337,11 +338,11 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-stone-100 dark:border-primary-700">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">Active Campaigns</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold font-display text-slate-900 dark:text-white">
                   {activeCampaigns?.length || 0}
                 </p>
               </div>
@@ -352,11 +353,11 @@ function Dashboard() {
           </div>
 
           {/* MANDATE 2: Replaced hardcoded "Success Rate 85%" with real funded count */}
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-stone-100 dark:border-primary-700">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">Funded Campaigns</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold font-display text-slate-900 dark:text-white">
                   {fundedCampaignsCount}
                 </p>
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
@@ -373,7 +374,7 @@ function Dashboard() {
         {/* Featured Campaigns */}
         <div>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-2xl font-bold font-display text-slate-900 dark:text-white">
               Featured Campaigns
             </h2>
             <button
@@ -385,24 +386,24 @@ function Dashboard() {
           </div>
 
           {loadingActive ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse border border-stone-100 dark:border-primary-700">
-                  <div className="h-48 bg-stone-200 dark:bg-primary-700 rounded-lg mb-4" />
-                  <div className="h-4 bg-stone-200 dark:bg-primary-700 rounded mb-2" />
-                  <div className="h-4 bg-stone-200 dark:bg-primary-700 rounded w-3/4" />
+                <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse border border-emerald-100 dark:border-primary-700">
+                  <div className="h-48 bg-emerald-100 dark:bg-primary-700 rounded-lg mb-4" />
+                  <div className="h-4 bg-emerald-100 dark:bg-primary-700 rounded mb-2" />
+                  <div className="h-4 bg-emerald-100 dark:bg-primary-700 rounded w-3/4" />
                 </div>
               ))}
             </div>
           ) : activeCampaigns && activeCampaigns.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
               {activeCampaigns.slice(0, 4).map((campaign) => (
                 <CampaignCard key={campaign.id} campaign={campaign} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-stone-300 dark:border-primary-700">
-              <FiTarget className="w-16 h-16 text-stone-300 dark:text-primary-600 mx-auto mb-4" />
+            <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-emerald-200 dark:border-primary-700">
+              <FiTarget className="w-16 h-16 text-slate-300 dark:text-primary-600 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                 No Active Campaigns
               </h3>
@@ -419,8 +420,11 @@ function Dashboard() {
           )}
         </div>
 
+        {/* Leaderboard + Recent Activity grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
         {/* MANDATE 3: Dynamic Recent Activity — real on-chain contribution events */}
-        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-stone-100 dark:border-primary-700">
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Recent Activity
@@ -438,6 +442,9 @@ function Dashboard() {
             networkName={networkName}
             isLoading={loadingContributions && recentCampaigns.length > 0}
           />
+          </div>
+        </div>
+          <TopContributors />
         </div>
 
       </div>

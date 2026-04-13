@@ -25,7 +25,11 @@
  * MANDATE 1 — Zombie Campaign (preserved):
  *   isFunded (raisedAmount >= targetAmount) → "✓ Successfully Funded" emerald badge.
  *
- * MANDATE 5 — Light Mode Cream Aesthetic (preserved).
+ * UPGRADE — Visual improvements (no logic changes):
+ *   1. Card wrapper: border-stone-100 → border-slate-100 (Slate Harmony theme)
+ *      hover:shadow-xl → campaign-card-glow (emerald glow on hover via globals.css)
+ *   2. Milestone status dots added below the progress bar:
+ *      Small colored dots per milestone — released=green, active=amber, pending=gray.
  */
 
 import { useState, useEffect } from "react";
@@ -136,7 +140,7 @@ export default function CampaignCard({ campaign, className = "" }) {
 
   return (
     <div
-      className={`bg-white dark:bg-primary-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group border border-stone-100 dark:border-primary-700 ${className}`}
+      className={`bg-white dark:bg-primary-800 rounded-xl shadow-lg campaign-card-glow overflow-hidden group border border-emerald-100 dark:border-primary-700 ${className}`}
     >
       {/* Image */}
       <div className="relative h-48 bg-gradient-emerald overflow-hidden">
@@ -219,7 +223,7 @@ export default function CampaignCard({ campaign, className = "" }) {
       <div className="p-6">
         {/* Title & Description */}
         <div className="mb-4">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">
+          <h3 className="text-lg font-bold font-display text-gray-900 dark:text-white mb-2 line-clamp-2">
             {campaign.title}
           </h3>
           <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">
@@ -262,6 +266,29 @@ export default function CampaignCard({ campaign, className = "" }) {
             )}
           </div>
         </div>
+
+        {/* Milestone status dots — visual indicator per milestone */}
+        {Array.isArray(rawMilestones) && rawMilestones.length > 0 && (
+          <div className="flex items-center gap-1.5 mb-4 -mt-1">
+            <span className="text-xs text-gray-400 dark:text-gray-500 mr-0.5">M:</span>
+            {rawMilestones.map((m, i) => {
+              const st = Number(m.status);
+              const color =
+                st === MS_RELEASED || st === MS_REFUNDED
+                  ? "bg-secondary-500"
+                  : st === 1
+                    ? "bg-accent-400"
+                    : "bg-gray-300 dark:bg-primary-600";
+              return (
+                <div
+                  key={i}
+                  title={`Milestone ${i + 1}: ${st === MS_RELEASED ? "Released" : st === MS_REFUNDED ? "Refunded" : st === 1 ? "Active" : "Pending"}`}
+                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color}`}
+                />
+              );
+            })}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 mb-4">

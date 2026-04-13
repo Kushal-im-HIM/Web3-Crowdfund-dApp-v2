@@ -105,14 +105,14 @@ export default function EthPriceWidget({ isCollapsed }) {
   if (loading && !price) {
     return (
       // ISSUE 2b FIX: dual-theme card background
-      <div className="mx-3 mb-3 p-4 rounded-2xl bg-white border border-slate-200 dark:bg-slate-800/80 dark:border-slate-700/40 space-y-3 shadow-sm dark:shadow-none">
+      <div className="mx-3 mb-3 p-4 rounded-2xl bg-white/10 border border-emerald-500/20 dark:bg-slate-800/80 dark:border-slate-700/40 space-y-3 shadow-sm dark:shadow-none">
         <div className="flex items-center justify-between">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-3.5 w-3.5 rounded-full" />
         </div>
         <Skeleton className="h-8 w-32" />
         <Skeleton className="h-4 w-28" />
-        <div className="h-1.5 bg-slate-200 dark:bg-slate-700/60 rounded-full" />
+        <div className="h-1.5 bg-emerald-500/20 dark:bg-slate-700/60 rounded-full" />
         <div className="grid grid-cols-2 gap-2">
           <Skeleton className="h-12 rounded-xl" />
           <Skeleton className="h-12 rounded-xl" />
@@ -128,7 +128,7 @@ export default function EthPriceWidget({ isCollapsed }) {
 
   return (
     // ISSUE 2b FIX: white card in light, slate in dark — both with proper border
-    <div className="mx-3 mb-3 rounded-2xl bg-white border border-slate-200 dark:bg-slate-800/80 dark:border-slate-700/40 overflow-hidden shadow-sm dark:shadow-none">
+    <div className="mx-3 mb-3 rounded-2xl bg-white/10 border border-emerald-500/20 dark:bg-slate-800/80 dark:border-slate-700/40 overflow-hidden shadow-sm dark:shadow-none">
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -159,7 +159,7 @@ export default function EthPriceWidget({ isCollapsed }) {
       </div>
 
       {/* Divider */}
-      <div className="h-px bg-slate-200 dark:bg-slate-700/40 mx-4" />
+      <div className="h-px bg-emerald-500/20 dark:bg-slate-700/40 mx-4" />
 
       {/* Body */}
       <div className="px-4 py-3">
@@ -222,7 +222,7 @@ export default function EthPriceWidget({ isCollapsed }) {
             {/* Market cap + 24h volume grid */}
             <div className="grid grid-cols-2 gap-2 mt-3">
               {/* ISSUE 2b FIX: solid card bg in light mode */}
-              <div className="bg-slate-100 dark:bg-slate-700/40 rounded-xl px-3 py-2.5 border border-slate-200 dark:border-slate-600/20">
+              <div className="bg-white/10 dark:bg-slate-700/40 rounded-xl px-3 py-2.5 border border-emerald-500/20 dark:border-slate-600/20">
                 <div className="flex items-center gap-1 mb-1">
                   <FiBarChart2 className="w-3 h-3 text-slate-400" />
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider">Mkt Cap</span>
@@ -232,7 +232,7 @@ export default function EthPriceWidget({ isCollapsed }) {
                 </span>
               </div>
 
-              <div className="bg-slate-100 dark:bg-slate-700/40 rounded-xl px-3 py-2.5 border border-slate-200 dark:border-slate-600/20">
+              <div className="bg-white/10 dark:bg-slate-700/40 rounded-xl px-3 py-2.5 border border-emerald-500/20 dark:border-slate-600/20">
                 <div className="flex items-center gap-1 mb-1">
                   <FiTrendingUp className="w-3 h-3 text-slate-400" />
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider">24h Vol</span>

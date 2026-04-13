@@ -55,6 +55,7 @@ import {
 import { useNetworkContracts } from "../../hooks/useNetworkContracts";
 import { CROWDFUNDING_ABI } from "../../constants/abi";
 import MilestonePanel from "../Milestone/MilestonePanel";
+import CampaignComments from "./CampaignComments";
 import MilestoneCreationForm from "../Milestone/MilestoneCreationForm";
 
 // Milestone status integers from the Solidity enum
@@ -619,7 +620,7 @@ export default function CampaignDetails({ campaignId }) {
       <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-stone-100 dark:border-primary-700 p-6 md:p-8">
         <div className="border-b border-stone-200 dark:border-primary-700 mb-6">
           <nav className="flex gap-8">
-            {["overview", "contributors"].map((tab) => (
+            {["overview", "contributors", "discussion"].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`pb-3 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${activeTab === tab
                   ? "border-secondary-500 text-secondary-600 dark:text-secondary-400"
@@ -729,6 +730,10 @@ export default function CampaignDetails({ campaignId }) {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === "discussion" && (
+          <CampaignComments campaignId={campaign?.id?.toString()} />
         )}
       </div>
     </div>

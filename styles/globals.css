@@ -1,55 +1,54 @@
-/* styles/globals.css */
-/*
- * MANDATE 5 — Global Light Mode Overhaul
+/* styles/globals.css
  *
- * Palette: "Cream & Emerald"
- * ──────────────────────────────────────────────────────────────────────────
- *  Background base  →  #F7F3ED  (warm cream, like aged paper — no stark white)
- *  Surface / card   →  #FDFAF6  (slightly lighter cream for cards)
- *  Border / divider →  #E8E0D5  (warm sand tone)
- *  Text primary     →  #2D2926  (dark warm brown — easier on eyes than #000)
- *  Text secondary   →  #6B5E52  (muted warm brown)
- *  Accent emerald   →  #059669  (secondary-600 — earthy, not neon)
- *  Accent emerald bg→  #ECFDF5  (very soft mint for highlighted areas)
- * ──────────────────────────────────────────────────────────────────────────
- * Dark mode is untouched — all dark: classes below preserve the original.
+ * UI/UX UPGRADE v2 — "Emerald Forest" Light Mode
+ *
+ * THE PHILOSOPHY:
+ *   Dark mode looks stunning because the deep slate-900 sidebar anchors the
+ *   navigation, emerald accents pop on dark, and there's real depth.
+ *   Light mode must mirror this structure — NOT just invert colors.
+ *
+ * LIGHT MODE — "Emerald Forest":
+ *   Sidebar:      emerald-900 (#064e3b) — deep forest green, mirrors dark sidebar
+ *   Page bg:      #ecfdf5 (emerald-50) — very subtle mint tint, not plain white
+ *   Card surface: #ffffff — white cards pop against the tinted page bg
+ *   Card border:  #d1fae5 (emerald-100) — whisper of color
+ *   Header:       #ffffff with emerald-100 bottom border
+ *   Text primary: #0f172a (slate-900)
+ *   Text body:    #475569 (slate-600)
+ *   Accent:       #10b981 (emerald-500)
+ *
+ * DARK MODE — unchanged from previous version.
  */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Base background — warm cream instead of stark white ──────────────────── */
+/* ── Base — Emerald Forest light ──────────────────────────────────────────── */
 html:not(.dark) {
-  background-color: #f7f3ed;
-  color: #2d2926;
+  background-color: #ecfdf5;
+  color: #0f172a;
 }
 
 html:not(.dark) body {
-  background-color: #f7f3ed;
-  color: #2d2926;
+  background-color: #ecfdf5;
+  color: #0f172a;
 }
 
-/* ── Tailwind base layer overrides for light mode ─────────────────────────── */
 @layer base {
-  /* Card and surface backgrounds — cream, not white */
-  .light-surface {
-    background-color: #fdfaf6;
-    border-color: #e8e0d5;
-  }
-
-  /* Softer input backgrounds in light mode */
   html:not(.dark) input,
   html:not(.dark) select,
   html:not(.dark) textarea {
-    background-color: #fdfaf6;
-    border-color: #d5c9bc;
-    color: #2d2926;
+    background-color: #ffffff;
+    border-color: #a7f3d0;
+    color: #0f172a;
   }
 
   html:not(.dark) input::placeholder,
   html:not(.dark) textarea::placeholder {
-    color: #9c8878;
+    color: #6ee7b7;
   }
 }
 
@@ -57,27 +56,308 @@ html:not(.dark) body {
 ::-webkit-scrollbar {
   width: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  @apply bg-amber-50 dark:bg-gray-700;
+  background: #ecfdf5;
 }
-
+.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
 ::-webkit-scrollbar-thumb {
-  @apply bg-stone-300 dark:bg-gray-600 rounded-full;
+  background: #6ee7b7;
+  border-radius: 999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-stone-400 dark:bg-gray-500;
+  background: #34d399;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
-/* ── Line clamp utilities ─────────────────────────────────────────────────── */
+/* ── SCROLL REVEAL ────────────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 {
+  transition-delay: 0.07s;
+}
+.reveal-delay-2 {
+  transition-delay: 0.14s;
+}
+.reveal-delay-3 {
+  transition-delay: 0.21s;
+}
+.reveal-delay-4 {
+  transition-delay: 0.28s;
+}
+.reveal-delay-5 {
+  transition-delay: 0.35s;
+}
+
+/* ── CSS MARQUEE ──────────────────────────────────────────────────────────── */
+@keyframes marquee-loop {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-wrap {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-loop 28s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* ── HERO DOT-GRID ────────────────────────────────────────────────────────── */
+.hero-dot-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    circle,
+    rgba(16, 185, 129, 0.18) 1px,
+    transparent 1px
+  );
+  background-size: 26px 26px;
+}
+
+.dark .hero-dot-grid {
+  background-image: radial-gradient(
+    circle,
+    rgba(100, 116, 139, 0.1) 1px,
+    transparent 1px
+  );
+}
+
+/* ── INNER PAGE DOT-GRID (dashboard welcome banner) ──────────────────────── */
+.page-dot-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: radial-gradient(
+    circle,
+    rgba(16, 185, 129, 0.15) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+.dark .page-dot-grid {
+  background-image: radial-gradient(
+    circle,
+    rgba(52, 211, 153, 0.08) 1px,
+    transparent 1px
+  );
+}
+
+/* ── DARK MESH HERO ───────────────────────────────────────────────────────── */
+@keyframes meshShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.dark-mesh-hero {
+  background: linear-gradient(
+    -45deg,
+    #0f172a 0%,
+    #042f2e 30%,
+    #0f172a 55%,
+    #0a1628 80%,
+    #0f172a 100%
+  );
+  background-size: 400% 400%;
+  animation: meshShift 20s ease infinite;
+}
+
+/* ── FONT DISPLAY ─────────────────────────────────────────────────────────── */
+.font-display {
+  font-family: "Space Grotesk", Inter, ui-sans-serif, system-ui;
+}
+
+/* ── ANIMATED HEADLINE SHIMMER ────────────────────────────────────────────── */
+@keyframes shimmer-text {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.shimmer-gradient-text {
+  background: linear-gradient(
+    90deg,
+    #10b981 0%,
+    #34d399 35%,
+    #059669 65%,
+    #10b981 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer-text 4s ease-in-out infinite;
+}
+
+/* ── EMERALD FOREST SIDEBAR (light mode only) ──────────────────────────────
+   The sidebar is deep emerald-900 in light mode, mirroring the dark slate-900
+   of dark mode. This is the single biggest visual upgrade for the inner app.
+   ----------------------------------------------------------------------- */
+html:not(.dark) .ef-sidebar {
+  background: linear-gradient(180deg, #047857 0%, #059669 100%);
+  border-right-color: #10b981;
+}
+
+html:not(.dark) .ef-sidebar-brand-border {
+  border-bottom-color: rgba(52, 211, 153, 0.15);
+}
+
+html:not(.dark) .ef-sidebar-nav-item {
+  color: #a7f3d0; /* emerald-200 */
+}
+
+html:not(.dark) .ef-sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+html:not(.dark) .ef-sidebar-nav-item.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+html:not(.dark) .ef-sidebar-nav-icon {
+  color: #6ee7b7; /* emerald-300 */
+}
+
+html:not(.dark) .ef-sidebar-nav-item:hover .ef-sidebar-nav-icon,
+html:not(.dark) .ef-sidebar-nav-item.active .ef-sidebar-nav-icon {
+  color: #ffffff;
+}
+
+html:not(.dark) .ef-sidebar-status-connected {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+}
+
+html:not(.dark) .ef-sidebar-status-disconnected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+html:not(.dark) .ef-sidebar-address {
+  color: #6ee7b7;
+}
+
+html:not(.dark) .ef-sidebar-admin-badge {
+  color: #fcd34d;
+}
+
+html:not(.dark) .ef-sidebar-toggle-btn {
+  color: #6ee7b7;
+}
+html:not(.dark) .ef-sidebar-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+html:not(.dark) .ef-sidebar-divider {
+  border-color: rgba(52, 211, 153, 0.15);
+}
+
+/* ── HEADER — white with emerald tint border (light mode) ─────────────────── */
+html:not(.dark) .ef-header {
+  background: rgba(255, 255, 255, 0.97);
+  border-bottom-color: #a7f3d0;
+}
+
+/* ── CARD SURFACE (inner pages) ───────────────────────────────────────────── */
+html:not(.dark) .ef-card {
+  background: #ffffff;
+  border-color: #d1fae5;
+}
+
+/* ── STATS CARD — emerald top accent bar ──────────────────────────────────── */
+.ef-stats-card-accent::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 12px 12px 0 0;
+}
+
+.ef-stats-card-accent.accent-emerald::before {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+.ef-stats-card-accent.accent-cyan::before {
+  background: linear-gradient(90deg, #06b6d4, #22d3ee);
+}
+.ef-stats-card-accent.accent-amber::before {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+.ef-stats-card-accent.accent-primary::before {
+  background: linear-gradient(90deg, #64748b, #94a3b8);
+}
+.ef-stats-card-accent.accent-secondary::before {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+.ef-stats-card-accent.accent-tertiary::before {
+  background: linear-gradient(90deg, #06b6d4, #0891b2);
+}
+
+/* ── Line clamp ───────────────────────────────────────────────────────────── */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-
 .line-clamp-3 {
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -97,12 +377,11 @@ html:not(.dark) body {
     background-position: right center;
   }
 }
-
 .animate-gradient-x {
   animation: gradient-x 3s ease infinite;
 }
 
-/* ── Loading / shimmer ────────────────────────────────────────────────────── */
+/* ── Loading shimmer ──────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0% {
     background-position: -468px 0;
@@ -112,10 +391,9 @@ html:not(.dark) body {
   }
 }
 
-/* MANDATE 5: Light mode shimmer uses warm cream tones */
 .animate-shimmer {
   animation: shimmer 1.2s ease-in-out infinite;
-  background: linear-gradient(to right, #f0ece5 8%, #e6e0d6 18%, #f0ece5 33%);
+  background: linear-gradient(to right, #d1fae5 8%, #a7f3d0 18%, #d1fae5 33%);
   background-size: 800px 104px;
 }
 
@@ -128,14 +406,12 @@ html:not(.dark) body {
 .btn-hover-lift {
   transition: all 0.2s ease-in-out;
 }
-
 .btn-hover-lift:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.08),
+    0 10px 25px -5px rgba(16, 185, 129, 0.12),
     0 10px 10px -5px rgba(0, 0, 0, 0.03);
 }
-
 .dark .btn-hover-lift:hover {
   box-shadow:
     0 10px 25px -5px rgba(0, 0, 0, 0.3),
@@ -146,21 +422,40 @@ html:not(.dark) body {
 .card-hover {
   transition: all 0.3s ease-in-out;
 }
-
 .card-hover:hover {
   transform: translateY(-4px);
   box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.07),
+    0 20px 25px -5px rgba(16, 185, 129, 0.08),
     0 10px 10px -5px rgba(0, 0, 0, 0.03);
 }
-
 .dark .card-hover:hover {
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.3),
     0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
-/* ── Progress bar animations ──────────────────────────────────────────────── */
+/* ── CAMPAIGN CARD GLOW ───────────────────────────────────────────────────── */
+.campaign-card-glow {
+  transition:
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
+}
+.campaign-card-glow:hover {
+  box-shadow:
+    0 0 0 1.5px rgba(16, 185, 129, 0.3),
+    0 20px 40px -8px rgba(16, 185, 129, 0.12),
+    0 8px 16px -4px rgba(0, 0, 0, 0.04);
+  transform: translateY(-3px);
+}
+.dark .campaign-card-glow:hover {
+  box-shadow:
+    0 0 0 1.5px rgba(16, 185, 129, 0.3),
+    0 20px 40px -8px rgba(16, 185, 129, 0.18),
+    0 8px 16px -4px rgba(0, 0, 0, 0.3);
+  transform: translateY(-3px);
+}
+
+/* ── Progress bar animation ───────────────────────────────────────────────── */
 .progress-bar {
   background-size: 40px 40px;
   background-image: linear-gradient(
@@ -175,7 +470,6 @@ html:not(.dark) body {
   );
   animation: progress-animation 2s linear infinite;
 }
-
 @keyframes progress-animation {
   0% {
     background-position: 0 0;
@@ -185,66 +479,43 @@ html:not(.dark) body {
   }
 }
 
-/* ── Toast customizations ─────────────────────────────────────────────────── */
+/* ── Toast ────────────────────────────────────────────────────────────────── */
 .toast-success {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
-
 .toast-error {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 }
 
 /* ── Modal backdrop ───────────────────────────────────────────────────────── */
 .modal-backdrop {
-  backdrop-filter: blur(4px);
-  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  background-color: rgba(6, 78, 59, 0.4);
 }
-
-/* ── Responsive text utilities ────────────────────────────────────────────── */
-@media (max-width: 640px) {
-  .text-responsive-xl {
-    font-size: 1.5rem;
-    line-height: 2rem;
-  }
-}
-
-@media (min-width: 641px) {
-  .text-responsive-xl {
-    font-size: 3rem;
-    line-height: 1;
-  }
+.dark .modal-backdrop {
+  background-color: rgba(15, 23, 42, 0.65);
 }
 
 /* ── Status badges ────────────────────────────────────────────────────────── */
 .status-active {
   @apply bg-secondary-100 text-secondary-800 dark:bg-secondary-900 dark:text-secondary-200;
 }
-
 .status-inactive {
   @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
 }
-
 .status-pending {
   @apply bg-accent-100 text-accent-800 dark:bg-accent-900 dark:text-accent-200;
 }
-
 .status-funded {
   @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200;
 }
 
-/*
- * MANDATE 5 — Glass morphism
- *
- * Light mode: opaque warm cream card — visible and readable, with a warm
- *             sand border for definition. No blinding white.
- * Dark mode:  original translucent dark — unchanged.
- */
+/* ── Glass ────────────────────────────────────────────────────────────────── */
 .glass {
-  background: rgba(253, 250, 246, 0.92); /* warm cream/90 */
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(180, 160, 140, 0.25); /* warm sand border */
+  border: 1px solid rgba(16, 185, 129, 0.15);
 }
-
 .dark .glass {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -258,24 +529,20 @@ html:not(.dark) body {
   background-clip: text;
 }
 
-/* ── Border gradient — updated to emerald ─────────────────────────────────── */
+/* ── Border gradient ──────────────────────────────────────────────────────── */
 .border-gradient {
   border: 2px solid transparent;
   background:
-    linear-gradient(#fdfaf6, #fdfaf6) padding-box,
+    linear-gradient(#ffffff, #ffffff) padding-box,
     linear-gradient(135deg, #10b981 0%, #059669 100%) border-box;
 }
-
 .dark .border-gradient {
   background:
     linear-gradient(#1f2937, #1f2937) padding-box,
     linear-gradient(135deg, #10b981 0%, #059669 100%) border-box;
 }
 
-/*
- * MANDATE 5 — Emerald funded badge glow pulse
- * Used on campaign cards for the "✓ Successfully Funded" badge.
- */
+/* ── Funded badge glow pulse ──────────────────────────────────────────────── */
 @keyframes emerald-pulse {
   0%,
   100% {
@@ -285,25 +552,109 @@ html:not(.dark) body {
     box-shadow: 0 0 24px rgba(16, 185, 129, 0.8);
   }
 }
-
 .funded-glow {
   animation: emerald-pulse 2s ease-in-out infinite;
 }
 
-/* ── Print styles ─────────────────────────────────────────────────────────── */
+/* ── Guide modal step animation ───────────────────────────────────────────── */
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.step-animate {
+  animation: step-in 0.28s ease-out;
+}
+
+/* ── SECTION HEADING ACCENT BAR ────────────────────────────────────────────── */
+.section-heading-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-heading-accent::before {
+  content: "";
+  display: block;
+  width: 4px;
+  height: 1.2em;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #10b981, #059669);
+  flex-shrink: 0;
+}
+
+/* ── EMERALD WELCOME BANNER ─────────────────────────────────────────────────── */
+.welcome-banner {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #ecfdf5 100%);
+  border: 1px solid #a7f3d0;
+}
+.dark .welcome-banner {
+  background: linear-gradient(135deg, #0f172a 0%, #064e3b 100%);
+  border-color: #065f46;
+}
+
+/* ── Responsive text ──────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .text-responsive-xl {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+}
+@media (min-width: 641px) {
+  .text-responsive-xl {
+    font-size: 3rem;
+    line-height: 1;
+  }
+}
+
+/* ── Print ────────────────────────────────────────────────────────────────── */
 @media print {
   .no-print {
     display: none !important;
   }
-
   body {
     font-size: 12pt;
     line-height: 1.4;
     color: black;
     background: white;
   }
-
   .print-break {
     page-break-before: always;
   }
+}
+
+/* ── EthPriceWidget legibility on emerald sidebar (light mode) ─────────────
+   The widget sits inside .ef-sidebar which has a medium-green bg.
+   Force all text inside the widget to white/light so it's always readable. */
+html:not(.dark) .ef-sidebar .animate-pulse {
+  background: rgba(255, 255, 255, 0.15);
+}
+html:not(.dark) .ef-sidebar text,
+html:not(.dark) .ef-sidebar span,
+html:not(.dark) .ef-sidebar p,
+html:not(.dark) .ef-sidebar div[class*="text-slate"],
+html:not(.dark) .ef-sidebar div[class*="text-gray"] {
+  color: rgba(255, 255, 255, 0.9);
+}
+html:not(.dark) .ef-sidebar .text-emerald-700 {
+  color: #a7f3d0 !important;
+}
+html:not(.dark) .ef-sidebar .text-red-700 {
+  color: #fca5a5 !important;
+}
+html:not(.dark) .ef-sidebar .bg-emerald-100 {
+  background: rgba(16, 185, 129, 0.2) !important;
+}
+html:not(.dark) .ef-sidebar .bg-red-100 {
+  background: rgba(239, 68, 68, 0.2) !important;
+}
+html:not(.dark) .ef-sidebar .border-emerald-200 {
+  border-color: rgba(52, 211, 153, 0.3) !important;
+}
+html:not(.dark) .ef-sidebar .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.3) !important;
 }

@@ -177,7 +177,7 @@ export default function CampaignsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">All Campaigns</h1>
+            <h1 className="text-3xl font-bold font-display text-slate-900 dark:text-white">All Campaigns</h1>
             <p className="text-gray-600 dark:text-gray-400">Discover and support projects on EthosFund</p>
           </div>
           <div className="flex items-center space-x-2">
@@ -185,7 +185,7 @@ export default function CampaignsPage() {
               <button key={mode} onClick={() => setViewMode(mode)} title={title}
                 className={`p-2 rounded-lg transition-colors ${viewMode === mode
                   ? "bg-secondary-500 text-white shadow-emerald-glow"
-                  : "bg-stone-100 dark:bg-primary-700 text-gray-600 dark:text-gray-400 hover:bg-stone-200 dark:hover:bg-primary-600"
+                  : "bg-emerald-100 dark:bg-primary-700 text-emerald-700 dark:text-gray-400 hover:bg-emerald-200 dark:hover:bg-primary-600"
                   }`}>
                 <Icon className="w-5 h-5" />
               </button>
@@ -194,8 +194,8 @@ export default function CampaignsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-stone-100 dark:border-primary-700">
-          <div className="flex border-b border-stone-200 dark:border-primary-700">
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-sm border border-emerald-100 dark:border-primary-700">
+          <div className="flex border-b border-emerald-100 dark:border-primary-700">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const count = counts[tab.key] ?? 0;
@@ -204,33 +204,33 @@ export default function CampaignsPage() {
                 <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition-colors border-b-2 -mb-px ${isSel
                       ? "border-secondary-500 text-secondary-600 dark:text-secondary-400 bg-secondary-50/50 dark:bg-secondary-900/10"
-                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-stone-50 dark:hover:bg-primary-700/50"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-emerald-50 dark:hover:bg-primary-700/50"
                     }`}>
                   <Icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isSel ? "bg-secondary-500 text-white" : "bg-stone-200 dark:bg-primary-600 text-gray-600 dark:text-gray-300"
+                  <span className="hidden xs:inline">{tab.label}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isSel ? "bg-secondary-500 text-white" : "bg-emerald-100 dark:bg-primary-600 text-emerald-700 dark:text-gray-300"
                     }`}>{count}</span>
                 </button>
               );
             })}
           </div>
-          <div className="px-6 py-2 text-xs text-gray-500 dark:text-gray-400">
+          <div className="px-6 py-2 text-xs text-slate-500 dark:text-gray-400">
             {TABS.find((t) => t.key === activeTab)?.desc}
           </div>
         </div>
 
         {/* Search & Sort */}
-        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 border border-stone-100 dark:border-primary-700">
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 border border-emerald-100 dark:border-primary-700">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input type="text" placeholder="Search campaigns..." value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-stone-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 outline-none bg-white dark:bg-primary-700 dark:text-white text-gray-900"
+                className="w-full pl-10 pr-4 py-3 border border-emerald-200 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500 outline-none bg-white dark:bg-primary-700 dark:text-white text-gray-900"
               />
             </div>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-3 border border-stone-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 outline-none bg-white dark:bg-primary-700 dark:text-white text-gray-900">
+              className="px-4 py-3 border border-emerald-200 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 outline-none bg-white dark:bg-primary-700 dark:text-white text-gray-900">
               <option value="newest">Newest First</option>
               <option value="ending">Ending Soon</option>
               <option value="funded">Most Funded</option>
@@ -242,18 +242,18 @@ export default function CampaignsPage() {
         {/* Results */}
         <div>
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse border border-stone-100 dark:border-primary-700">
-                  <div className="h-48 bg-stone-200 dark:bg-primary-700 rounded-lg mb-4" />
-                  <div className="h-4 bg-stone-200 dark:bg-primary-700 rounded mb-2" />
-                  <div className="h-4 bg-stone-200 dark:bg-primary-700 rounded w-3/4" />
+                <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse border border-emerald-100 dark:border-primary-700">
+                  <div className="h-48 bg-emerald-100 dark:bg-primary-700 rounded-lg mb-4" />
+                  <div className="h-4 bg-emerald-100 dark:bg-primary-700 rounded mb-2" />
+                  <div className="h-4 bg-slate-200 dark:bg-primary-700 rounded w-3/4" />
                 </div>
               ))}
             </div>
           ) : processedCampaigns.length > 0 ? (
             <div className={viewMode === "grid"
-              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6"
               : "space-y-4"
             }>
               {processedCampaigns.map((campaign) => (
@@ -262,9 +262,9 @@ export default function CampaignsPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-16 bg-white dark:bg-primary-800 rounded-xl border border-stone-100 dark:border-primary-700">
-              <FiSearch className="w-16 h-16 text-stone-300 dark:text-primary-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="text-center py-16 bg-white dark:bg-primary-800 rounded-xl border border-emerald-100 dark:border-primary-700">
+              <FiSearch className="w-16 h-16 text-emerald-200 dark:text-primary-600 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold font-display text-slate-900 dark:text-white mb-2">
                 {searchTerm ? "No matching campaigns" : `No ${activeTab} campaigns`}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 text-sm">

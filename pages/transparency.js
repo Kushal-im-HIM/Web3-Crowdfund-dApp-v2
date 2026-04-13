@@ -64,17 +64,17 @@ function StatusBadge({ status }) {
 
 function MethodBadge({ label }) {
   const colours = {
-    createCampaign:          "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
-    contributeToCampaign:    "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
-    contributeToMilestone:   "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
-    withdrawCampaignFunds:   "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
-    withdrawMilestoneFunds:  "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
-    getRefund:               "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
-    claimMilestoneRefund:    "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
-    registerCampaign:        "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
-    createMilestone:         "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
+    createCampaign: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
+    contributeToCampaign: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
+    contributeToMilestone: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
+    withdrawCampaignFunds: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
+    withdrawMilestoneFunds: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300",
+    getRefund: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
+    claimMilestoneRefund: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300",
+    registerCampaign: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
+    createMilestone: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300",
     submitMilestoneEvidence: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
-    "ETH Transfer":          "bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-300",
+    "ETH Transfer": "bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-300",
   };
   const cls = colours[label] ?? "bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-300";
   return (
@@ -87,10 +87,10 @@ function MethodBadge({ label }) {
 // ─── Tab: Wallet Transactions ─────────────────────────────────────────────────
 
 function WalletTransactionsTab({ address, isLocalhost, chainId }) {
-  const [txs, setTxs]         = useState([]);
+  const [txs, setTxs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isMock, setIsMock]   = useState(false);
-  const [error, setError]     = useState(null);
+  const [isMock, setIsMock] = useState(false);
+  const [error, setError] = useState(null);
 
   // ERROR 3 FIX: pass live chainId into the fetch so it targets the correct
   // Etherscan chain rather than the boot-time IS_LOCALHOST constant
@@ -279,10 +279,10 @@ function WalletTransactionsTab({ address, isLocalhost, chainId }) {
 function CampaignActivityTab({ address }) {
   const { useUserCampaigns, useUserContributions, useMultipleCampaigns } = useContract();
 
-  const { data: createdIds,      isLoading: loadingCreated }     = useUserCampaigns(address);
-  const { data: contributedIds,  isLoading: loadingContributed } = useUserContributions(address);
+  const { data: createdIds, isLoading: loadingCreated } = useUserCampaigns(address);
+  const { data: contributedIds, isLoading: loadingContributed } = useUserContributions(address);
 
-  const { campaigns: createdCampaigns,     isLoading: loadingCreatedDetails }     = useMultipleCampaigns(createdIds);
+  const { campaigns: createdCampaigns, isLoading: loadingCreatedDetails } = useMultipleCampaigns(createdIds);
   const { campaigns: contributedCampaigns, isLoading: loadingContributedDetails } = useMultipleCampaigns(contributedIds);
 
   const isLoading = loadingCreated || loadingContributed || loadingCreatedDetails || loadingContributedDetails;
@@ -301,7 +301,7 @@ function CampaignActivityTab({ address }) {
     );
   }
 
-  const hasCreated     = createdCampaigns?.length > 0;
+  const hasCreated = createdCampaigns?.length > 0;
   const hasContributed = contributedCampaigns?.length > 0;
 
   if (!hasCreated && !hasContributed) {
@@ -327,11 +327,11 @@ function CampaignActivityTab({ address }) {
           </div>
           <div className="space-y-3">
             {createdCampaigns.map((c) => {
-              const raised   = parseFloat(formatEther(c.raisedAmount));
-              const target   = parseFloat(formatEther(c.targetAmount));
+              const raised = parseFloat(formatEther(c.raisedAmount));
+              const target = parseFloat(formatEther(c.targetAmount));
               const progress = target > 0 ? Math.min((raised / target) * 100, 100) : 0;
-              const expired  = Number(c.deadline) * 1000 < Date.now();
-              const funded   = raised >= target;
+              const expired = Number(c.deadline) * 1000 < Date.now();
+              const funded = raised >= target;
               return (
                 <div key={c.id.toString()}
                   className="p-4 bg-white dark:bg-primary-800 border border-slate-200 dark:border-primary-700 rounded-xl hover:shadow-md transition-shadow">
@@ -383,11 +383,11 @@ function CampaignActivityTab({ address }) {
           </div>
           <div className="space-y-3">
             {contributedCampaigns.map((c) => {
-              const target   = parseFloat(formatEther(c.targetAmount));
-              const raised   = parseFloat(formatEther(c.raisedAmount));
+              const target = parseFloat(formatEther(c.targetAmount));
+              const raised = parseFloat(formatEther(c.raisedAmount));
               const progress = target > 0 ? Math.min((raised / target) * 100, 100) : 0;
-              const expired  = Number(c.deadline) * 1000 < Date.now();
-              const funded   = raised >= target;
+              const expired = Number(c.deadline) * 1000 < Date.now();
+              const funded = raised >= target;
               return (
                 <div key={c.id.toString()}
                   className="p-4 bg-white dark:bg-primary-800 border border-slate-200 dark:border-primary-700 rounded-xl hover:shadow-md transition-shadow">
@@ -424,8 +424,8 @@ function CampaignActivityTab({ address }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "wallet",   label: "Wallet Transactions", icon: FiList },
-  { id: "activity", label: "Campaign Activity",   icon: FiActivity },
+  { id: "wallet", label: "Wallet Transactions", icon: FiList },
+  { id: "activity", label: "Campaign Activity", icon: FiActivity },
 ];
 
 export default function TransparencyPage() {
@@ -433,10 +433,10 @@ export default function TransparencyPage() {
   // ERROR 3 FIX: live network state — updates when MetaMask chain switches
   const { isLocalhost, name: networkName, chainId } = useNetworkContracts();
 
-  const [inputValue,      setInputValue]      = useState("");
+  const [inputValue, setInputValue] = useState("");
   const [searchedAddress, setSearchedAddress] = useState("");
-  const [activeTab,       setActiveTab]       = useState("wallet");
-  const [addressError,    setAddressError]    = useState("");
+  const [activeTab, setActiveTab] = useState("wallet");
+  const [addressError, setAddressError] = useState("");
 
   useEffect(() => {
     if (connectedAddress && !inputValue) {
@@ -473,7 +473,7 @@ export default function TransparencyPage() {
             Dark:   original slate-800 → slate-900 gradient, white text
         */}
         <div className="relative overflow-hidden rounded-xl p-7 shadow-sm border
-          bg-gradient-to-br from-stone-100 via-emerald-50 to-stone-100 border-stone-200
+          bg-gradient-to-br from-slate-100 via-emerald-50 to-slate-100 border-slate-200
           dark:bg-gradient-to-br dark:from-slate-800 dark:to-slate-900 dark:border-slate-700/50">
 
           {/* Decorative blurs — visible in both modes */}
@@ -522,11 +522,10 @@ export default function TransparencyPage() {
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg text-sm font-mono
                   bg-white dark:bg-primary-700
                   text-slate-900 dark:text-white
-                  focus:ring-2 focus:ring-secondary-500 outline-none transition-colors ${
-                  addressError
+                  focus:ring-2 focus:ring-secondary-500 outline-none transition-colors ${addressError
                     ? "border-red-400 dark:border-red-600"
                     : "border-slate-300 dark:border-primary-600"
-                }`}
+                  }`}
               />
             </div>
             <button
@@ -594,11 +593,10 @@ export default function TransparencyPage() {
               <nav className="flex gap-6">
                 {TABS.map(({ id, label, icon: Icon }) => (
                   <button key={id} onClick={() => setActiveTab(id)}
-                    className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors ${
-                      activeTab === id
+                    className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === id
                         ? "border-secondary-500 text-secondary-600 dark:text-secondary-400"
                         : "border-transparent text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-300"
-                    }`}>
+                      }`}>
                     <Icon className="w-4 h-4" />
                     {label}
                   </button>

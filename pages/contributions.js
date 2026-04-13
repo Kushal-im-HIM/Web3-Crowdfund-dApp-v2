@@ -206,8 +206,8 @@ export default function ContributionsPage() {
                           <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
                             <span>Progress: {Math.min(progress, 100).toFixed(1)}%</span>
                             <span className={`px-2 py-1 rounded-full ${isActive
-                                ? "bg-secondary-50 text-secondary-800 dark:bg-secondary-900/30 dark:text-secondary-300"
-                                : "bg-gray-100 text-gray-800 dark:bg-primary-900/50 dark:text-gray-400"
+                              ? "bg-secondary-50 text-secondary-800 dark:bg-secondary-900/30 dark:text-secondary-300"
+                              : "bg-gray-100 text-gray-800 dark:bg-primary-900/50 dark:text-gray-400"
                               }`}>
                               {isActive ? "Active" : "Ended"}
                             </span>

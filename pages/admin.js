@@ -244,7 +244,7 @@ export default function AdminPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Admin Panel</h1>
+            <h1 className="text-3xl font-bold font-display text-slate-900 dark:text-white mb-2 section-heading-accent">Admin Panel</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Manage platform settings and monitor system health
             </p>
@@ -258,13 +258,13 @@ export default function AdminPage() {
         </div>
 
         {/* Platform Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
           {[
             { label: "Total Campaigns", value: totalCampaigns, icon: FiActivity, color: "secondary" },
             { label: "Anti-Spam Deposits", value: `${availableFees} ETH`, icon: FiDollarSign, color: "tertiary" },
             { label: "Contract Balance", value: `${contractBalance} ETH`, icon: FiShield, color: "accent" },
           ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
+            <div key={label} className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-600 dark:text-gray-400 text-sm">{label}</p>
@@ -278,7 +278,7 @@ export default function AdminPage() {
           ))}
 
           {/* Platform Status card */}
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">Platform Status</p>
@@ -297,11 +297,11 @@ export default function AdminPage() {
         </div>
 
         {/* Admin Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
 
           {/* Deposit Management */}
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Deposit Management</h3>
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
+            <h3 className="text-lg font-semibold font-display text-slate-900 dark:text-white mb-4">Deposit Management</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -311,7 +311,7 @@ export default function AdminPage() {
                   type="number" step="0.01" min="0" max={availableFees}
                   placeholder="0.00" value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 dark:bg-primary-700 dark:text-white outline-none"
+                  className="w-full px-4 py-3 border border-emerald-200 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 dark:bg-primary-700 dark:text-white outline-none"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Available: {availableFees} ETH</p>
               </div>
@@ -326,8 +326,8 @@ export default function AdminPage() {
           </div>
 
           {/* Platform Controls */}
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Platform Controls</h3>
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
+            <h3 className="text-lg font-semibold font-display text-slate-900 dark:text-white mb-4">Platform Controls</h3>
             <div className="space-y-4">
               <button
                 onClick={handlePauseContract}
@@ -354,8 +354,8 @@ export default function AdminPage() {
           </div>
 
           {/* Campaign Management */}
-          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Campaign Management</h3>
+          <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
+            <h3 className="text-lg font-semibold font-display text-slate-900 dark:text-white mb-4">Campaign Management</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -365,7 +365,7 @@ export default function AdminPage() {
                   type="number" min="1" placeholder="Enter campaign ID"
                   value={campaignToToggle}
                   onChange={(e) => setCampaignToToggle(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 dark:bg-primary-700 dark:text-white outline-none"
+                  className="w-full px-4 py-3 border border-emerald-200 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-secondary-500 dark:bg-primary-700 dark:text-white outline-none"
                 />
               </div>
               <button
@@ -380,8 +380,8 @@ export default function AdminPage() {
         </div>
 
         {/* Contract Information */}
-        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Contract Information</h3>
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
+          <h3 className="text-lg font-semibold font-display text-slate-900 dark:text-white mb-4">Contract Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-600 dark:text-gray-400">Contract Address:</span>
@@ -409,8 +409,8 @@ export default function AdminPage() {
         </div>
 
         {/* System Status */}
-        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">System Status</h3>
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
+          <h3 className="text-lg font-semibold font-display text-slate-900 dark:text-white mb-4">System Status</h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-primary-900/50 rounded-lg">
               <div className="flex items-center space-x-3">
