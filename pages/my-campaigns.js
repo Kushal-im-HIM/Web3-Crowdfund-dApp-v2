@@ -28,6 +28,7 @@ import { useAccount, useContractReads } from "wagmi";
 import { useRouter } from "next/router";
 import { useEffect, useState, useMemo } from "react";
 import Layout from "../components/Layout/Layout";
+import RouteGuard from "../components/RouteGuard";
 import CampaignCard from "../components/Campaign/CampaignCard";
 import { useContract } from "../hooks/useContract";
 import { useNetworkContracts } from "../hooks/useNetworkContracts";
@@ -115,26 +116,7 @@ export default function MyCampaignsPage() {
     }
   }, [campaignsData, campaignIds]);
 
-  useEffect(() => {
-    if (!isConnected) router.push("/");
-  }, [isConnected, router]);
 
-  if (!isConnected) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-              Connect Your Wallet
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Please connect your wallet to view your campaigns.
-            </p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
 
   const totalRaised = campaigns.reduce(
     (sum, c) => sum + parseFloat(formatEther(c.raisedAmount || 0)), 0
@@ -147,84 +129,86 @@ export default function MyCampaignsPage() {
   ).length;
 
   return (
-    <Layout>
-      <div className="space-y-8">
+    <RouteGuard>
+      <Layout>
+        <div className="space-y-8">
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold font-display text-slate-900 dark:text-white">My Campaigns</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Manage and track your crowdfunding campaigns
-            </p>
-          </div>
-          <button
-            onClick={() => router.push("/create-campaign")}
-            className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 inline-flex items-center"
-          >
-            <FiPlus className="w-5 h-5 mr-2" />
-            Create Campaign
-          </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[
-            { label: "Total Campaigns", value: campaigns.length, icon: FiTarget, color: "secondary" },
-            { label: "Total Raised", value: `${totalRaised.toFixed(2)} ETH`, icon: FiTrendingUp, color: "tertiary" },
-            { label: "Active", value: activeCampaigns, icon: FiUsers, color: "accent" },
-            { label: "Successful", value: successfulCampaigns, icon: FiTarget, color: "secondary" },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">{label}</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-                </div>
-                <div className={`w-12 h-12 bg-${color}-50 dark:bg-${color}-900/20 rounded-lg flex items-center justify-center`}>
-                  <Icon className={`w-6 h-6 text-${color}-600 dark:text-${color}-400`} />
-                </div>
-              </div>
+          {/* Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold font-display text-slate-900 dark:text-white">My Campaigns</h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Manage and track your crowdfunding campaigns
+              </p>
             </div>
-          ))}
-        </div>
-
-        {/* Campaigns Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse">
-                <div className="h-48 bg-gray-200 dark:bg-primary-700 rounded-lg mb-4" />
-                <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded mb-2" />
-                <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded w-3/4" />
-              </div>
-            ))}
-          </div>
-        ) : campaigns.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {campaigns.map((campaign) => (
-              <CampaignCard key={campaign.id} campaign={campaign} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-gray-300 dark:border-primary-700">
-            <FiTarget className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              No campaigns yet
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Create your first campaign to get started with crowdfunding.
-            </p>
             <button
               onClick={() => router.push("/create-campaign")}
               className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 inline-flex items-center"
             >
               <FiPlus className="w-5 h-5 mr-2" />
-              Create Your First Campaign
+              Create Campaign
             </button>
           </div>
-        )}
-      </div>
-    </Layout>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[
+              { label: "Total Campaigns", value: campaigns.length, icon: FiTarget, color: "secondary" },
+              { label: "Total Raised", value: `${totalRaised.toFixed(2)} ETH`, icon: FiTrendingUp, color: "tertiary" },
+              { label: "Active", value: activeCampaigns, icon: FiUsers, color: "accent" },
+              { label: "Successful", value: successfulCampaigns, icon: FiTarget, color: "secondary" },
+            ].map(({ label, value, icon: Icon, color }) => (
+              <div key={label} className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">{label}</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+                  </div>
+                  <div className={`w-12 h-12 bg-${color}-50 dark:bg-${color}-900/20 rounded-lg flex items-center justify-center`}>
+                    <Icon className={`w-6 h-6 text-${color}-600 dark:text-${color}-400`} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Campaigns Grid */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse">
+                  <div className="h-48 bg-gray-200 dark:bg-primary-700 rounded-lg mb-4" />
+                  <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded mb-2" />
+                  <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : campaigns.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {campaigns.map((campaign) => (
+                <CampaignCard key={campaign.id} campaign={campaign} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-gray-300 dark:border-primary-700">
+              <FiTarget className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                No campaigns yet
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                Create your first campaign to get started with crowdfunding.
+              </p>
+              <button
+                onClick={() => router.push("/create-campaign")}
+                className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 inline-flex items-center"
+              >
+                <FiPlus className="w-5 h-5 mr-2" />
+                Create Your First Campaign
+              </button>
+            </div>
+          )}
+        </div>
+      </Layout>
+    </RouteGuard>
   );
 }

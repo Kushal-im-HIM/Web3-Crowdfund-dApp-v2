@@ -1,4 +1,5 @@
 import Layout from "../components/Layout/Layout";
+import RouteGuard from "../components/RouteGuard";
 import CreateCampaignForm from "../components/Campaign/CreateCampaignForm";
 import { useAccount } from "wagmi";
 import { useRouter } from "next/router";
@@ -14,26 +15,13 @@ export default function CreateCampaignPage() {
     }
   }, [isConnected, router]);
 
-  if (!isConnected) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-              Connect Your Wallet
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Please connect your wallet to create a campaign.
-            </p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
+
 
   return (
-    <Layout>
-      <CreateCampaignForm />
-    </Layout>
+    <RouteGuard>
+      <Layout>
+        <CreateCampaignForm />
+      </Layout>
+    </RouteGuard>
   );
 }

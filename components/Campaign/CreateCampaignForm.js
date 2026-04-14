@@ -26,6 +26,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import { ethers } from "ethers";
 import { toast } from "react-hot-toast";
+import { useHoneypot, useRateLimit } from "../HoneypotGuard";
 import { FiUpload, FiX, FiInfo } from "react-icons/fi";
 import { useContract } from "../../hooks/useContract";
 import { uploadCampaignMetadata } from "../../utils/ipfs";
@@ -89,9 +90,23 @@ export default function CreateCampaignForm() {
     return true;
   };
 
+  const { HoneypotField, validateHoneypot } = useHoneypot();
+  const { checkRateLimit } = useRateLimit(6000);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
+
+    // Anti-bot: honeypot + rate limit check
+    if (!validateHoneypot()) {
+      toast.error("Submission rejected. Please try again.");
+      return;
+    }
+    const rateCheck = checkRateLimit("createCampaign");
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.message);
+      return;
+    }
 
     if (!createCampaignAsync) {
       toast.error("Contract function not available. Please check your wallet connection.");
@@ -184,6 +199,7 @@ export default function CreateCampaignForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <HoneypotField />
 
         {/* ── MANDATE 3: Text inputs appear FIRST ───────────────────────── */}
 

@@ -797,7 +797,7 @@ export default function Home() {
                 Fiat-to-Crypto Onramp
               </h3>
               <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mb-5">
-                Donate with a credit card — Visa, Mastercard, Apple Pay, or Google Pay. MoonPay converts it to ETH instantly behind the scenes. No wallet setup required to contribute.
+                Donate with a credit card — Visa, Mastercard, Apple Pay. MoonPay converts it to ETH instantly behind the scenes. No wallet setup required to contribute.
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <FiatOnrampWidget />
