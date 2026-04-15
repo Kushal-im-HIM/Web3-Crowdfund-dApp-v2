@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { Toaster } from "react-hot-toast";
-import KeyboardShortcuts from "./KeyboardShortcuts";
+import KeyboardShortcuts from "../KeyboardShortcuts";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 

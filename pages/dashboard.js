@@ -1,44 +1,23 @@
 /**
- * pages/dashboard.js
+ * pages/dashboard.js — FIXED
  *
- * COMBINED BEST-OF-BOTH:
- *
- * From Patch B (structure wins):
- *   - Dedicated RecentActivity component (clean separation of concerns)
- *   - "Funded Campaigns" quick-stat card with subtitle "reached their goal"
- *   - useMemo for all derived values
- *   - stone-* cream theming on card borders and skeleton loaders
- *   - Live network name badge
- *
- * From Patch A (data accuracy wins — Mandate 3):
- *   - useContractReads batch-reads getCampaignContributions from the 4 most
- *     recently created campaigns, surfacing REAL contribution events:
- *     contributor address + ETH amount + timestamp.
- *   - RecentActivity receives these events directly so it shows "0x1234…
- *     contributed 0.25 ETH to Project X" — the actual transaction-level data
- *     the mandate asked for, not just campaign creation events.
- *   - Falls back to campaign-level activity when no contributions exist yet.
- *
- * MANDATE 2 — Dashboard Data Audit:
- *   - "Success Rate 85%" (hardcoded) → "Funded Campaigns" (real on-chain count)
- *   - All four quick-stat cards derive values from live hooks.
- *
- * MANDATE 3 — Dynamic Recent Activity Footer:
- *   - "Emerald Network" static string → live networkName from useNetworkContracts()
- *   - Activity feed sourced from real getCampaignContributions contract reads.
- *
- * MANDATE 5 — Cream aesthetic:
- *   - border-stone-100 on cards, bg-stone-* skeleton loaders.
+ * Bugs fixed in this revision:
+ *  1. Closing tags (Layout, RouteGuard) were misplaced inside RecentActivity empty-state
+ *  2. RouteGuard wrapper was opened but never closed in Dashboard main return
+ *  3. Removed redundant useEffect router.push (RouteGuard handles this)
+ *  4. Removed redundant if (!isConnected) guard block (RouteGuard handles this)
+ *  5. Fixed grid div nesting for Leaderboard + Activity section
+ *  6. Cleaned all duplicate/conflicting isConnected checks
  */
 
 import { useAccount, useContractReads } from "wagmi";
 import { useRouter } from "next/router";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import Layout from "../components/Layout/Layout";
 import RouteGuard from "../components/RouteGuard";
 import DashboardStats from "../components/Dashboard/DashboardStats";
 import TopContributors from "../components/Dashboard/TopContributors";
-import { CampaignCardSkeleton, StatsCardSkeleton } from "../components/SkeletonCard";
+import { CampaignCardSkeleton } from "../components/SkeletonCard";
 import CampaignCard from "../components/Campaign/CampaignCard";
 import { useContract } from "../hooks/useContract";
 import { useNetworkContracts } from "../hooks/useNetworkContracts";
@@ -46,11 +25,11 @@ import { CROWDFUNDING_ABI } from "../constants/abi";
 import { formatEther, formatAddress } from "../utils/helpers";
 import {
   FiTrendingUp, FiUsers, FiTarget, FiActivity,
-  FiShield, FiAward, FiClock, FiZap,
+  FiShield, FiAward, FiClock,
 } from "react-icons/fi";
 
+// ── RecentActivity ─────────────────────────────────────────────────────────────
 function RecentActivity({ contributions, campaigns, networkName, isLoading }) {
-
   const contributionItems = useMemo(() => {
     if (!contributions || contributions.length === 0) return [];
     return contributions
@@ -105,7 +84,7 @@ function RecentActivity({ contributions, campaigns, networkName, isLoading }) {
         {contributionItems.map((event, i) => (
           <div
             key={i}
-            className="flex items-center space-x-4 p-4 bg-emerald-50 dark:bg-primary-900/50 rounded-lg border border-emerald-100 dark:border-primary-700 hover:bg-slate-100 dark:hover:bg-primary-700/30 transition-colors"
+            className="flex items-center space-x-4 p-4 bg-emerald-50 dark:bg-primary-900/50 rounded-lg border border-emerald-100 dark:border-primary-700 hover:bg-emerald-100 dark:hover:bg-primary-700/30 transition-colors"
           >
             <div className="w-2.5 h-2.5 rounded-full bg-secondary-500 flex-shrink-0 animate-pulse" />
             <div className="flex-1 min-w-0">
@@ -149,7 +128,7 @@ function RecentActivity({ contributions, campaigns, networkName, isLoading }) {
         {campaignItems.map(({ campaign, raisedEth, targetEth, funded, date }) => (
           <div
             key={campaign.id}
-            className="flex items-center space-x-4 p-4 bg-emerald-50 dark:bg-primary-900/50 rounded-lg border border-emerald-100 dark:border-primary-700 hover:bg-slate-100 dark:hover:bg-primary-700/30 transition-colors"
+            className="flex items-center space-x-4 p-4 bg-emerald-50 dark:bg-primary-900/50 rounded-lg border border-emerald-100 dark:border-primary-700 hover:bg-emerald-100 dark:hover:bg-primary-700/30 transition-colors"
           >
             <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${funded ? "bg-emerald-500" : "bg-secondary-400"}`} />
             <div className="flex-1 min-w-0">
@@ -191,8 +170,9 @@ function RecentActivity({ contributions, campaigns, networkName, isLoading }) {
   );
 }
 
+// ── Dashboard Page ─────────────────────────────────────────────────────────────
 function Dashboard() {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const router = useRouter();
   const { useActiveCampaigns, useUserCampaigns, useUserContributions } = useContract();
   const { name: networkName, contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
@@ -229,56 +209,165 @@ function Dashboard() {
     }).length;
   }, [allCampaigns]);
 
-  useEffect(() => {
-    if (!isConnected) router.push("/");
-  }, [isConnected, router]);
-
-  if (!isConnected) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold font-display text-slate-900 dark:text-white mb-4">
-              Connect Your Wallet
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Please connect your wallet to access the dashboard.
-            </p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
 
   return (
     <RouteGuard>
       <Layout>
         <div className="space-y-8">
 
-          {/* (rest unchanged) */}
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <div className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-emerald-100 dark:border-primary-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Recent Activity
-                  </h3>
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-secondary-500 animate-pulse" />
-                    Live · {networkName}
-                  </div>
-                </div>
-
-                <RecentActivity
-                  contributions={batchContributions}
-                  campaigns={recentCampaigns}
-                  networkName={networkName}
-                  isLoading={loadingContributions && recentCampaigns.length > 0}
-                />
+          {/* Welcome Hero */}
+          <div className="relative overflow-hidden bg-gradient-slate-emerald dark:bg-gradient-slate-emerald-dark rounded-xl p-8 shadow-lg border border-emerald-100 dark:border-primary-700">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute -top-20 -right-20 w-64 h-64 bg-secondary-200 dark:bg-secondary-900 rounded-full opacity-20 blur-3xl" />
+              <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-accent-200 dark:bg-accent-900 rounded-full opacity-20 blur-3xl" />
+            </div>
+            <div className="max-w-3xl relative z-10">
+              <h1 className="text-3xl font-bold mb-2 font-display text-slate-900 dark:text-white">
+                Welcome to the Ethos Console 🌿
+              </h1>
+              <p className="text-gray-700 dark:text-gray-300 text-lg mb-6">
+                Discover amazing projects, support innovative ideas, or launch your own campaign.
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <button
+                  onClick={() => router.push("/create-campaign")}
+                  className="bg-gradient-emerald text-white px-6 py-3 rounded-lg font-semibold hover:shadow-emerald-glow transition-all duration-300"
+                >
+                  Create Campaign
+                </button>
+                <button
+                  onClick={() => router.push("/campaigns")}
+                  className="bg-white dark:bg-primary-800 text-gray-900 dark:text-white px-6 py-3 rounded-lg font-semibold border-2 border-gray-300 dark:border-primary-600 hover:border-secondary-500 transition-all duration-300"
+                >
+                  Browse Campaigns
+                </button>
               </div>
             </div>
-            <TopContributors />
+          </div>
+
+          {/* Platform Statistics */}
+          <div>
+            <h2 className="text-2xl font-bold font-display text-slate-900 dark:text-white mb-6 section-heading-accent">
+              EthosFund Statistics
+            </h2>
+            <DashboardStats />
+          </div>
+
+          {/* User Quick Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+            {[
+              {
+                label: "My Campaigns",
+                value: userCampaigns?.length || 0,
+                icon: FiTarget,
+                color: "secondary",
+              },
+              {
+                label: "My Contributions",
+                value: userContributions?.length || 0,
+                icon: FiUsers,
+                color: "tertiary",
+              },
+              {
+                label: "Active Campaigns",
+                value: activeCampaigns?.length || 0,
+                icon: FiActivity,
+                color: "accent",
+              },
+              {
+                label: "Funded Campaigns",
+                value: fundedCampaignsCount,
+                icon: FiAward,
+                color: "emerald",
+                sub: "reached their goal",
+              },
+            ].map(({ label, value, icon: Icon, color, sub }) => (
+              <div key={label} className="bg-white dark:bg-primary-800 rounded-xl p-5 border border-emerald-100 dark:border-primary-700 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">{label}</p>
+                    <p className="text-2xl font-bold font-display text-slate-900 dark:text-white mt-0.5">{value}</p>
+                    {sub && (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">{sub}</p>
+                    )}
+                  </div>
+                  <div className={`w-11 h-11 bg-${color}-50 dark:bg-${color}-900/20 rounded-xl flex items-center justify-center flex-shrink-0`}>
+                    <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Featured Campaigns */}
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold font-display text-slate-900 dark:text-white section-heading-accent">
+                Featured Campaigns
+              </h2>
+              <button
+                onClick={() => router.push("/campaigns")}
+                className="text-secondary-600 dark:text-secondary-400 hover:text-secondary-700 font-medium text-sm"
+              >
+                View All →
+              </button>
+            </div>
+
+            {loadingActive ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+                {[...Array(4)].map((_, i) => <CampaignCardSkeleton key={i} />)}
+              </div>
+            ) : activeCampaigns && activeCampaigns.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+                {activeCampaigns.slice(0, 4).map((campaign) => (
+                  <CampaignCard key={campaign.id} campaign={campaign} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-emerald-200 dark:border-primary-700">
+                <FiTarget className="w-16 h-16 text-slate-300 dark:text-primary-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  No Active Campaigns Yet
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">
+                  Be the first to launch a campaign on EthosFund!
+                </p>
+                <button
+                  onClick={() => router.push("/create-campaign")}
+                  className="bg-gradient-emerald text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-emerald-glow"
+                >
+                  Create Campaign
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Recent Activity — spans 2 of 3 cols */}
+            <div className="lg:col-span-2 bg-white dark:bg-primary-800 rounded-xl p-6 border border-emerald-100 dark:border-primary-700 shadow-sm">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-semibold font-display text-gray-900 dark:text-white section-heading-accent">
+                  Recent Activity
+                </h3>
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-secondary-500 animate-pulse" />
+                  Live · {networkName}
+                </div>
+              </div>
+              <RecentActivity
+                contributions={batchContributions}
+                campaigns={recentCampaigns}
+                networkName={networkName}
+                isLoading={loadingContributions && recentCampaigns.length > 0}
+              />
+            </div>
+
+            {/* Leaderboard — 1 col */}
+            <div className="lg:col-span-1">
+              <TopContributors />
+            </div>
+
           </div>
 
         </div>

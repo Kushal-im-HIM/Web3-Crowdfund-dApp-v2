@@ -36,7 +36,7 @@ import {
   FiSearch, FiFilter, FiGrid, FiList,
   FiCheckCircle, FiActivity,
 } from "react-icons/fi";
-import { CampaignCardSkeleton } from "../components/SkeletonCard";
+import { CampaignCardSkeleton } from "../../components/SkeletonCard";
 
 const TABS = [
   {

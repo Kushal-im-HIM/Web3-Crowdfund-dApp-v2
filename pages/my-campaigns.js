@@ -1,27 +1,11 @@
 /**
- * pages/my-campaigns.js
+ * pages/my-campaigns.js — FIXED
  *
- * ERROR 4 FIX — My Campaigns Page Empty
- *
- * ROOT CAUSE:
- *   `campaignContracts` useMemo was building contract call objects with
- *   CONTRACT_ADDRESS imported from constants/index.js — a value frozen at boot
- *   time from NEXT_PUBLIC_NETWORK. When connected to Sepolia after booting on
- *   Hardhat (or starting the server with the wrong NEXT_PUBLIC_NETWORK), this
- *   address pointed to the wrong network, so getCampaign() returned 0x (empty)
- *   for every ID. The entire campaigns array was filtered to [].
- *
- *   Additionally, the useContractReads call inherited the same stale address,
- *   so even if campaignIds arrived correctly, no data was ever fetched.
- *
- * THE FIX:
- *   1. Remove the static CONTRACT_ADDRESS import.
- *   2. Call useNetworkContracts() to get the live address for the connected chain.
- *   3. Add CONTRACT_ADDRESS to the useMemo dependency array so the contract
- *      calls are rebuilt whenever the user switches networks in MetaMask.
- *   4. Pass the live address directly to useContractReads.
- *
- * No visual changes — only data-fetching logic was updated.
+ * Bugs fixed:
+ *  1. Duplicate CampaignCard import removed (compile error)
+ *  2. Watchlist tab now actually renders — added activeTab conditional
+ *     and fetches allCampaigns so bookmarked IDs can be resolved to real data
+ *  3. Added useActiveCampaigns to supply allCampaigns for watchlist filtering
  */
 
 import { useAccount, useContractReads } from "wagmi";
@@ -32,52 +16,38 @@ import RouteGuard from "../components/RouteGuard";
 import CampaignCard from "../components/Campaign/CampaignCard";
 import { useContract } from "../hooks/useContract";
 import { useCampaignBookmarks } from "../hooks/useCampaignBookmarks";
-import CampaignCard from "../components/Campaign/CampaignCard";
 import { useNetworkContracts } from "../hooks/useNetworkContracts";
-import { FiPlus, FiTarget, FiTrendingUp, FiUsers } from "react-icons/fi";
+import { FiPlus, FiTarget, FiTrendingUp, FiUsers, FiHeart, FiBookmark } from "react-icons/fi";
 import { formatEther, calculateProgress } from "../utils/helpers";
 import { CROWDFUNDING_ABI } from "../constants/abi";
 
 export default function MyCampaignsPage() {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const router = useRouter();
-  const { useUserCampaigns } = useContract();
-  const { bookmarks } = useCampaignBookmarks();
+  const { useUserCampaigns, useActiveCampaigns } = useContract();
+  const { bookmarks, isBookmarked } = useCampaignBookmarks();
   const [activeTab, setActiveTab] = useState("mine");
-
-  // ERROR 4 FIX: live contract address — updates when MetaMask chain changes
   const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
 
+  // ── My Campaigns (creator) ────────────────────────────────────────────────
   const [campaigns, setCampaigns] = useState([]);
-
   const { data: campaignIds, isLoading: loadingIds } = useUserCampaigns(address);
 
-  // ERROR 4 FIX: CONTRACT_ADDRESS added to dependency array so useMemo rebuilds
-  // when the user switches chains — previously stale address caused empty results
   const campaignContracts = useMemo(() => {
     if (!campaignIds || campaignIds.length === 0 || !CONTRACT_ADDRESS) return [];
+    return campaignIds.map((id) => ({
+      address: CONTRACT_ADDRESS,
+      abi: CROWDFUNDING_ABI,
+      functionName: "getCampaign",
+      args: [typeof id === "bigint" ? Number(id) : Number(id.toString())],
+    }));
+  }, [campaignIds, CONTRACT_ADDRESS]);
 
-    return campaignIds.map((id) => {
-      const numberId = typeof id === "bigint" ? Number(id) : Number(id.toString());
-      return {
-        address: CONTRACT_ADDRESS,   // ← live address, not the frozen import
-        abi: CROWDFUNDING_ABI,
-        functionName: "getCampaign",
-        args: [numberId],
-      };
-    });
-  }, [campaignIds, CONTRACT_ADDRESS]); // ← CONTRACT_ADDRESS in deps
-
-  const {
-    data: campaignsData,
-    isLoading: loadingCampaigns,
-  } = useContractReads({
+  const { data: campaignsData, isLoading: loadingCampaigns } = useContractReads({
     contracts: campaignContracts,
     enabled: campaignContracts.length > 0,
     watch: true,
   });
-
-  const loading = loadingIds || loadingCampaigns;
 
   useEffect(() => {
     if (campaignsData && campaignIds) {
@@ -113,14 +83,23 @@ export default function MyCampaignsPage() {
           return null;
         })
         .filter(Boolean);
-
       setCampaigns(formatted);
     } else if (campaignIds && campaignIds.length === 0) {
       setCampaigns([]);
     }
   }, [campaignsData, campaignIds]);
 
+  // ── Watchlist — BUG 2+3 FIX ──────────────────────────────────────────────
+  // Fetch all campaigns so we can filter by bookmarked IDs
+  const { data: allCampaigns, isLoading: loadingAll } = useActiveCampaigns(0, 100);
 
+  const watchlistCampaigns = useMemo(() => {
+    if (!allCampaigns || bookmarks.size === 0) return [];
+    return allCampaigns.filter((c) => isBookmarked(c.id));
+  }, [allCampaigns, bookmarks, isBookmarked]);
+
+  // ── Stats (derived from My Campaigns) ────────────────────────────────────
+  const loading = loadingIds || loadingCampaigns;
 
   const totalRaised = campaigns.reduce(
     (sum, c) => sum + parseFloat(formatEther(c.raisedAmount || 0)), 0
@@ -140,84 +119,171 @@ export default function MyCampaignsPage() {
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              {/* Tabs */}
-              <div className="flex gap-2 mb-6">
-                <button onClick={() => setActiveTab("mine")} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${activeTab === "mine" ? "bg-emerald-500 text-white" : "bg-white dark:bg-primary-800 text-slate-600 dark:text-slate-300 border border-emerald-100 dark:border-primary-700 hover:bg-emerald-50"}`}>My Campaigns</button>
-                <button onClick={() => setActiveTab("watchlist")} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === "watchlist" ? "bg-red-500 text-white" : "bg-white dark:bg-primary-800 text-slate-600 dark:text-slate-300 border border-emerald-100 dark:border-primary-700 hover:bg-emerald-50"}`}>
-                  ♥ Watchlist {bookmarks.size > 0 && <span className="bg-white/20 rounded-full px-1.5 text-xs">{bookmarks.size}</span>}
-                </button>
-              </div>
-              <h1 className="text-3xl font-bold font-display text-slate-900 dark:text-white">My Campaigns</h1>
+              <h1 className="text-3xl font-bold font-display text-slate-900 dark:text-white mb-1">
+                My Campaigns
+              </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                Manage and track your crowdfunding campaigns
+                Manage your campaigns and track your watchlist
               </p>
             </div>
             <button
               onClick={() => router.push("/create-campaign")}
-              className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 inline-flex items-center"
+              className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 inline-flex items-center flex-shrink-0"
             >
               <FiPlus className="w-5 h-5 mr-2" />
               Create Campaign
             </button>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[
-              { label: "Total Campaigns", value: campaigns.length, icon: FiTarget, color: "secondary" },
-              { label: "Total Raised", value: `${totalRaised.toFixed(2)} ETH`, icon: FiTrendingUp, color: "tertiary" },
-              { label: "Active", value: activeCampaigns, icon: FiUsers, color: "accent" },
-              { label: "Successful", value: successfulCampaigns, icon: FiTarget, color: "secondary" },
-            ].map(({ label, value, icon: Icon, color }) => (
-              <div key={label} className="bg-white dark:bg-primary-800 rounded-xl shadow-slate-soft p-6 border border-gray-100 dark:border-primary-700">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">{label}</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-                  </div>
-                  <div className={`w-12 h-12 bg-${color}-50 dark:bg-${color}-900/20 rounded-lg flex items-center justify-center`}>
-                    <Icon className={`w-6 h-6 text-${color}-600 dark:text-${color}-400`} />
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab("mine")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === "mine"
+                  ? "bg-emerald-500 text-white shadow-emerald-glow"
+                  : "bg-white dark:bg-primary-800 text-slate-600 dark:text-slate-300 border border-emerald-100 dark:border-primary-700 hover:bg-emerald-50 dark:hover:bg-primary-700"
+                }`}
+            >
+              <FiTarget className="w-4 h-4" />
+              My Campaigns
+              <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === "mine" ? "bg-white/20" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                }`}>
+                {campaigns.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("watchlist")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === "watchlist"
+                  ? "bg-red-500 text-white shadow-sm"
+                  : "bg-white dark:bg-primary-800 text-slate-600 dark:text-slate-300 border border-emerald-100 dark:border-primary-700 hover:bg-red-50 dark:hover:bg-primary-700"
+                }`}
+            >
+              <FiHeart className="w-4 h-4" />
+              Watchlist
+              <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === "watchlist"
+                  ? "bg-white/20"
+                  : bookmarks.size > 0
+                    ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                    : "bg-slate-100 dark:bg-primary-700 text-slate-500"
+                }`}>
+                {bookmarks.size}
+              </span>
+            </button>
           </div>
 
-          {/* Campaigns Grid */}
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse">
-                  <div className="h-48 bg-gray-200 dark:bg-primary-700 rounded-lg mb-4" />
-                  <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded mb-2" />
-                  <div className="h-4 bg-gray-200 dark:bg-primary-700 rounded w-3/4" />
+          {/* ── MY CAMPAIGNS TAB ──────────────────────────────────────────── */}
+          {activeTab === "mine" && (
+            <>
+              {/* Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                {[
+                  { label: "Total Campaigns", value: campaigns.length, icon: FiTarget, color: "secondary" },
+                  { label: "Total Raised", value: `${totalRaised.toFixed(3)} ETH`, icon: FiTrendingUp, color: "tertiary" },
+                  { label: "Active", value: activeCampaigns, icon: FiUsers, color: "accent" },
+                  { label: "Successful", value: successfulCampaigns, icon: FiTarget, color: "secondary" },
+                ].map(({ label, value, icon: Icon, color }) => (
+                  <div key={label} className="bg-white dark:bg-primary-800 rounded-xl p-5 border border-emerald-100 dark:border-primary-700 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">{label}</p>
+                        <p className="text-2xl font-bold font-display text-gray-900 dark:text-white mt-0.5">{value}</p>
+                      </div>
+                      <div className={`w-11 h-11 bg-${color}-50 dark:bg-${color}-900/20 rounded-xl flex items-center justify-center`}>
+                        <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Campaigns grid */}
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-primary-800 rounded-xl border border-emerald-100 dark:border-primary-700 animate-pulse">
+                      <div className="h-48 bg-emerald-100 dark:bg-primary-700 rounded-t-xl" />
+                      <div className="p-5 space-y-3">
+                        <div className="h-4 bg-emerald-100 dark:bg-primary-700 rounded w-3/4" />
+                        <div className="h-3 bg-emerald-100 dark:bg-primary-700 rounded w-full" />
+                        <div className="h-2 bg-emerald-100 dark:bg-primary-700 rounded-full w-full" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : campaigns.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {campaigns.map((campaign) => (
-                <CampaignCard key={campaign.id} campaign={campaign} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-gray-300 dark:border-primary-700">
-              <FiTarget className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No campaigns yet
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Create your first campaign to get started with crowdfunding.
-              </p>
-              <button
-                onClick={() => router.push("/create-campaign")}
-                className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 inline-flex items-center"
-              >
-                <FiPlus className="w-5 h-5 mr-2" />
-                Create Your First Campaign
-              </button>
-            </div>
+              ) : campaigns.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {campaigns.map((campaign) => (
+                    <CampaignCard key={campaign.id} campaign={campaign} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-emerald-200 dark:border-primary-700">
+                  <FiTarget className="w-16 h-16 text-emerald-200 dark:text-primary-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold font-display text-gray-900 dark:text-white mb-2">
+                    No campaigns yet
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    Create your first campaign to start crowdfunding.
+                  </p>
+                  <button
+                    onClick={() => router.push("/create-campaign")}
+                    className="bg-gradient-emerald hover:shadow-emerald-glow text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 inline-flex items-center"
+                  >
+                    <FiPlus className="w-5 h-5 mr-2" />
+                    Create Your First Campaign
+                  </button>
+                </div>
+              )}
+            </>
           )}
+
+          {/* ── WATCHLIST TAB — BUG 2 FIXED ───────────────────────────────── */}
+          {activeTab === "watchlist" && (
+            <>
+              {loadingAll ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-primary-800 rounded-xl border border-emerald-100 dark:border-primary-700 animate-pulse">
+                      <div className="h-48 bg-emerald-100 dark:bg-primary-700 rounded-t-xl" />
+                      <div className="p-5 space-y-3">
+                        <div className="h-4 bg-emerald-100 dark:bg-primary-700 rounded w-3/4" />
+                        <div className="h-3 bg-emerald-100 dark:bg-primary-700 rounded w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : watchlistCampaigns.length > 0 ? (
+                <>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {watchlistCampaigns.length} saved campaign{watchlistCampaigns.length !== 1 ? "s" : ""} · Click the ♥ on any card to remove
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {watchlistCampaigns.map((campaign) => (
+                      <CampaignCard key={campaign.id} campaign={campaign} />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-16 bg-white dark:bg-primary-800 rounded-xl border border-dashed border-red-200 dark:border-primary-700">
+                  <FiHeart className="w-16 h-16 text-red-200 dark:text-primary-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold font-display text-gray-900 dark:text-white mb-2">
+                    Your watchlist is empty
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    Tap the ♥ on any campaign card to save it here.
+                  </p>
+                  <button
+                    onClick={() => router.push("/campaigns")}
+                    className="bg-white dark:bg-primary-800 border border-emerald-200 dark:border-primary-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 px-6 py-3 rounded-lg font-semibold transition-all"
+                  >
+                    Browse Campaigns
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
         </div>
       </Layout>
     </RouteGuard>
