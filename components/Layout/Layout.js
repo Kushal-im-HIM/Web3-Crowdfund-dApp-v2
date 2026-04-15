@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import { Toaster } from "react-hot-toast";
+import KeyboardShortcuts from "./KeyboardShortcuts";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 
@@ -30,6 +31,7 @@ export default function Layout({ children }) {
         <main className="p-4 md:p-6">{children}</main>
       </div>
 
+      <KeyboardShortcuts />
       <Toaster
         position="top-right"
         toastOptions={{

@@ -31,6 +31,8 @@ import Layout from "../components/Layout/Layout";
 import RouteGuard from "../components/RouteGuard";
 import CampaignCard from "../components/Campaign/CampaignCard";
 import { useContract } from "../hooks/useContract";
+import { useCampaignBookmarks } from "../hooks/useCampaignBookmarks";
+import CampaignCard from "../components/Campaign/CampaignCard";
 import { useNetworkContracts } from "../hooks/useNetworkContracts";
 import { FiPlus, FiTarget, FiTrendingUp, FiUsers } from "react-icons/fi";
 import { formatEther, calculateProgress } from "../utils/helpers";
@@ -40,6 +42,8 @@ export default function MyCampaignsPage() {
   const { address, isConnected } = useAccount();
   const router = useRouter();
   const { useUserCampaigns } = useContract();
+  const { bookmarks } = useCampaignBookmarks();
+  const [activeTab, setActiveTab] = useState("mine");
 
   // ERROR 4 FIX: live contract address — updates when MetaMask chain changes
   const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
@@ -136,6 +140,13 @@ export default function MyCampaignsPage() {
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
+              {/* Tabs */}
+              <div className="flex gap-2 mb-6">
+                <button onClick={() => setActiveTab("mine")} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${activeTab === "mine" ? "bg-emerald-500 text-white" : "bg-white dark:bg-primary-800 text-slate-600 dark:text-slate-300 border border-emerald-100 dark:border-primary-700 hover:bg-emerald-50"}`}>My Campaigns</button>
+                <button onClick={() => setActiveTab("watchlist")} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === "watchlist" ? "bg-red-500 text-white" : "bg-white dark:bg-primary-800 text-slate-600 dark:text-slate-300 border border-emerald-100 dark:border-primary-700 hover:bg-emerald-50"}`}>
+                  ♥ Watchlist {bookmarks.size > 0 && <span className="bg-white/20 rounded-full px-1.5 text-xs">{bookmarks.size}</span>}
+                </button>
+              </div>
               <h1 className="text-3xl font-bold font-display text-slate-900 dark:text-white">My Campaigns</h1>
               <p className="text-gray-600 dark:text-gray-400">
                 Manage and track your crowdfunding campaigns

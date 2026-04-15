@@ -56,6 +56,10 @@ import { useNetworkContracts } from "../../hooks/useNetworkContracts";
 import { CROWDFUNDING_ABI } from "../../constants/abi";
 import MilestonePanel from "../Milestone/MilestonePanel";
 import CampaignComments from "./CampaignComments";
+import MilestoneTimeline from "./MilestoneTimeline";
+import ShareButton from "../ShareButton";
+import GasEstimator from "../GasEstimator";
+import { showTxToast, showTxSuccess, showTxError } from "../TxToast";
 import MilestoneCreationForm from "../Milestone/MilestoneCreationForm";
 
 // Milestone status integers from the Solidity enum
@@ -72,7 +76,7 @@ export default function CampaignDetails({ campaignId }) {
     useIsCampaignRegistered, useCampaignMilestones,
   } = useContract();
 
-  const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
+  const { contractAddress: CONTRACT_ADDRESS, blockExplorer } = useNetworkContracts();
 
   const [metadata, setMetadata] = useState(null);
   const [contributionAmount, setContributionAmount] = useState("");
@@ -220,16 +224,20 @@ export default function CampaignDetails({ campaignId }) {
       finalAmount = remainingEth;
       setContributionAmount(remainingEth.toFixed(6));
     }
+    let txHash = null;
     try {
-      await contribute?.({ args: [campaignId], value: ethers.utils.parseEther(finalAmount.toFixed(18)) });
+      const tx = await contribute?.({ args: [campaignId], value: ethers.utils.parseEther(finalAmount.toFixed(18)) });
+      txHash = tx?.hash;
+      if (txHash) showTxToast(txHash, blockExplorer);
       setContributionAmount("");
-    } catch (err) { console.error("Contribution error:", err); }
+      if (txHash) showTxSuccess(txHash, blockExplorer, "Contribution confirmed!");
+    } catch (err) {
+      showTxError(txHash, err);
+      console.error("Contribution error:", err);
+    }
   };
 
-  const handleShare = async () => {
-    const success = await copyToClipboard(window.location.href);
-    success ? toast.success("Link copied!") : toast.error("Failed to copy link");
-  };
+  // Share handled by ShareButton component
 
   // ── Hero badge / progress display ──────────────────────────────────────────
   // Priority: allMilestonesReleased > isFunded > anyMilestoneReleased > active
@@ -350,7 +358,8 @@ export default function CampaignDetails({ campaignId }) {
                 </span>
               )}
             </div>
-            <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/30 transition-all">
+            <ShareButton campaign={campaign} className="!px-2 !py-2 !text-white !hover:bg-white/20" />
+            <button onClick={() => { }} className="hidden">
               <FiShare2 className="w-4 h-4 text-white" />
             </button>
           </div>
@@ -500,6 +509,11 @@ export default function CampaignDetails({ campaignId }) {
                       className="w-full px-4 py-3 border border-stone-300 dark:border-primary-600 rounded-lg text-sm bg-white dark:bg-primary-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-secondary-500 outline-none"
                     />
 
+                    <GasEstimator
+                      amount={contributionAmount}
+                      enabled={Boolean(contributionAmount && parseFloat(contributionAmount) > 0)}
+                    />
+
                     <button
                       onClick={handleContribute}
                       disabled={contributing || !contributionAmount}
@@ -620,7 +634,7 @@ export default function CampaignDetails({ campaignId }) {
       <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg border border-stone-100 dark:border-primary-700 p-6 md:p-8">
         <div className="border-b border-stone-200 dark:border-primary-700 mb-6">
           <nav className="flex gap-8">
-            {["overview", "contributors", "discussion"].map((tab) => (
+            {["overview", "timeline", "contributors", "discussion"].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`pb-3 text-sm font-semibold uppercase tracking-wide transition-colors border-b-2 ${activeTab === tab
                   ? "border-secondary-500 text-secondary-600 dark:text-secondary-400"
@@ -730,6 +744,13 @@ export default function CampaignDetails({ campaignId }) {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === "timeline" && (
+          <MilestoneTimeline
+            milestones={rawMilestones || []}
+            targetAmount={campaign?.targetAmount}
+          />
         )}
 
         {activeTab === "discussion" && (

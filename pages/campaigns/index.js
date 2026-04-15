@@ -36,6 +36,7 @@ import {
   FiSearch, FiFilter, FiGrid, FiList,
   FiCheckCircle, FiActivity,
 } from "react-icons/fi";
+import { CampaignCardSkeleton } from "../components/SkeletonCard";
 
 const TABS = [
   {
@@ -203,8 +204,8 @@ export default function CampaignsPage() {
               return (
                 <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold transition-colors border-b-2 -mb-px ${isSel
-                      ? "border-secondary-500 text-secondary-600 dark:text-secondary-400 bg-secondary-50/50 dark:bg-secondary-900/10"
-                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-emerald-50 dark:hover:bg-primary-700/50"
+                    ? "border-secondary-500 text-secondary-600 dark:text-secondary-400 bg-secondary-50/50 dark:bg-secondary-900/10"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-emerald-50 dark:hover:bg-primary-700/50"
                     }`}>
                   <Icon className="w-4 h-4" />
                   <span className="hidden xs:inline">{tab.label}</span>

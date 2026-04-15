@@ -33,10 +33,11 @@
  */
 
 import { useState, useEffect } from "react";
+import { useCampaignBookmarks } from "../../hooks/useCampaignBookmarks";
 import Link from "next/link";
 import {
   FiUser, FiClock, FiTarget, FiTrendingUp,
-  FiCheckCircle, FiLock, FiAlertCircle, FiBox,
+  FiCheckCircle, FiLock, FiAlertCircle, FiBox, FiHeart,
 } from "react-icons/fi";
 import {
   formatEther,
@@ -54,6 +55,7 @@ const MIN_MILESTONES = 2;
 
 export default function CampaignCard({ campaign, className = "" }) {
   const [metadata, setMetadata] = useState(null);
+  const { toggle: toggleBookmark, isBookmarked } = useCampaignBookmarks();
 
   const { useCampaignMilestones, useIsCampaignRegistered } = useContract();
 
@@ -144,6 +146,14 @@ export default function CampaignCard({ campaign, className = "" }) {
     >
       {/* Image */}
       <div className="relative h-48 bg-gradient-emerald overflow-hidden">
+        {/* Bookmark button */}
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleBookmark(campaign.id); }}
+          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center backdrop-blur-sm transition-all"
+          title={isBookmarked(campaign.id) ? "Remove from watchlist" : "Save to watchlist"}
+        >
+          <FiHeart className={`w-4 h-4 transition-colors ${isBookmarked(campaign.id) ? "fill-red-400 text-red-400" : "text-white"}`} />
+        </button>
         {metadata?.image ? (
           <img
             src={metadata.image}
