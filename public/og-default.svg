@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0f172a"/>
+  <!-- Dot grid -->
+  <defs>
+    <pattern id="dots" x="0" y="0" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#1e293b"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+  <!-- Logo mark -->
+  <rect x="490" y="195" width="80" height="80" rx="20" fill="#10b981"/>
+  <rect x="507" y="215" width="46" height="11" rx="5.5" fill="white"/>
+  <rect x="507" y="231" width="33" height="11" rx="5.5" fill="white" opacity="0.82"/>
+  <rect x="507" y="247" width="20" height="11" rx="5.5" fill="white" opacity="0.6"/>
+  <!-- Text -->
+  <text x="600" y="328" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="48" fill="white">EthosFund</text>
+  <text x="600" y="378" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="400" font-size="24" fill="#34d399">Decentralised Crowdfunding · Built on Ethereum</text>
+  <!-- Trust pills -->
+  <rect x="330" y="420" width="160" height="36" rx="18" fill="#064e3b"/>
+  <text x="410" y="443" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16" fill="#6ee7b7">0% Platform Fees</text>
+  <rect x="510" y="420" width="180" height="36" rx="18" fill="#064e3b"/>
+  <text x="600" y="443" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16" fill="#6ee7b7">Milestone-Gated</text>
+  <rect x="710" y="420" width="160" height="36" rx="18" fill="#064e3b"/>
+  <text x="790" y="443" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16" fill="#6ee7b7">Auto Refunds</text>
+</svg>

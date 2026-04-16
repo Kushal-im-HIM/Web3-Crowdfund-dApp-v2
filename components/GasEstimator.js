@@ -2,15 +2,13 @@
  * components/GasEstimator.js
  *
  * Idea 6 — Gas estimator before contribution.
- * Shows estimated gas in ETH + USD using wagmi's usePrepareFunctionCall pattern.
+ * Shows estimated gas in ETH + USD using wagmi's useFeeData pattern (v1 compatible).
  * Purely additive, shown inline below the amount input.
- *
- * Fetches ETH/USD price from CoinGecko (already used by EthPriceWidget) or
- * falls back to a cached value. No new dependencies.
  */
 
 import { useState, useEffect } from "react";
-import { useEstimateGas, useGasPrice } from "wagmi";
+// In wagmi v1, we use useFeeData to get gas price
+import { useFeeData } from "wagmi";
 import { FiZap, FiInfo } from "react-icons/fi";
 
 const ETH_USD_CACHE_KEY = "ef_eth_usd_price";
@@ -31,12 +29,22 @@ async function getCachedEthUsd() {
 export default function GasEstimator({ amount, contractAddress, abi, campaignId, enabled }) {
   const [ethUsd, setEthUsd] = useState(2000);
 
-  useEffect(() => { getCachedEthUsd().then(setEthUsd); }, []);
+  useEffect(() => {
+    getCachedEthUsd().then(setEthUsd);
+  }, []);
 
-  const { data: gasPrice } = useGasPrice({ enabled: Boolean(enabled && amount) });
+  // wagmi v1: useFeeData returns an object containing gasPrice
+  const { data: feeData } = useFeeData({
+    watch: true,
+    enabled: Boolean(enabled && amount),
+  });
+
+  const gasPrice = feeData?.gasPrice;
 
   // Typical contribution gas: ~65,000 gas units for payable function
   const TYPICAL_GAS = 65000n;
+
+  // Calculate costs
   const gasCostWei = gasPrice ? gasPrice * TYPICAL_GAS : null;
   const gasCostEth = gasCostWei ? Number(gasCostWei) / 1e18 : null;
   const gasCostUsd = gasCostEth ? (gasCostEth * ethUsd) : null;

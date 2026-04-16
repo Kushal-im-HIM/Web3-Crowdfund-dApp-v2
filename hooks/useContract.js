@@ -93,6 +93,15 @@ export const useContract = () => {
   const useUserContributions = (usr) =>
     useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getUserContributions", args: [usr], enabled: !!usr && !!CONTRACT_ADDRESS, watch: true });
 
+  const useCampaignEscrow = (campaignId) =>
+    useContractRead({
+      address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI,
+      functionName: "getCampaignEscrow",
+      args: [campaignId],
+      enabled: !!campaignId && !!CONTRACT_ADDRESS,
+      watch: true,
+    });
+
   const useCampaignStats = (campaignId) =>
     useContractRead({ address: CONTRACT_ADDRESS, abi: CROWDFUNDING_ABI, functionName: "getCampaignStats", args: [campaignId], enabled: !!campaignId && !!CONTRACT_ADDRESS, watch: true });
 
@@ -172,7 +181,10 @@ export const useContract = () => {
     makeMilestoneWrite("registerCampaign", "Milestone system active!");
 
   const useCreateMilestone = () => makeMilestoneWrite("createMilestone", "Milestone created!");
-  const useContributeToMilestone = () => makeMilestoneWrite("contributeToMilestone", "Contribution successful!");
+  // NOTE: contributeToMilestone() does NOT exist in the unified Crowdfunding contract.
+  // Contributions go through contributeToCampaign() at the campaign level.
+  // This stub is kept for backward ABI compat; callers should use useContributeToCampaignSimple() instead.
+  const useContributeToMilestone = () => useContributeToCampaignSimple();
   const useVoteMilestone = () => makeMilestoneWrite("voteMilestone", "Vote recorded!");
   const useWithdrawMilestone = () => makeMilestoneWrite("withdrawMilestoneFunds", "Funds released!");
   const useClaimMilestoneRefund = () => makeMilestoneWrite("claimMilestoneRefund", "Refund claimed!");
@@ -205,7 +217,7 @@ export const useContract = () => {
     useWithdrawFunds, useGetRefund,
     // Campaign reads
     useCampaign, useActiveCampaigns, useUserCampaigns, useUserContributions,
-    useContractStats, useMultipleCampaigns, useCampaignStats, useContribution,
+    useContractStats, useMultipleCampaigns, useCampaignStats, useContribution, useCampaignEscrow,
     // Milestone reads
     useCampaignMilestones, useMyMilestoneContribution, useMyMilestoneVote,
     useIsCampaignRegistered,

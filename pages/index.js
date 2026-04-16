@@ -28,8 +28,7 @@ import {
   FiCheckCircle, FiZap, FiLock, FiTrendingUp, FiCode,
   FiGift, FiBook, FiSun, FiMoon, FiX, FiChevronRight,
   FiChevronLeft, FiActivity, FiBarChart2, FiThumbsUp,
-  FiDollarSign, FiEye, FiCpu, FiHelpCircle, FiSmartphone, // Add this
-  FiMail
+  FiDollarSign, FiEye, FiCpu, FiHelpCircle, FiSmartphone, FiMail
 } from "react-icons/fi";
 
 // ── Guide walkthrough steps ───────────────────────────────────────────────────
@@ -422,8 +421,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-emerald-glow">
-                <span className="text-white font-bold text-lg font-display">EF</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 shadow-emerald-glow">
+                <img src="/favicon.svg" alt="EthosFund" className="w-full h-full" />
               </div>
               <div>
                 <span className="text-xl font-bold text-slate-900 dark:text-white font-display">EthosFund</span>
@@ -745,9 +744,7 @@ export default function Home() {
           <div className="reveal bg-gradient-slate-emerald dark:bg-gradient-slate-emerald-dark rounded-3xl p-12 relative overflow-hidden border border-slate-100 dark:border-primary-700">
             <div className="hero-dot-grid opacity-50" />
             <div className="relative">
-              <div className="w-16 h-16 bg-gradient-emerald rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-emerald-glow">
-                <span className="text-white font-bold text-2xl font-display">EF</span>
-              </div>
+              <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-6 shadow-emerald-glow"><img src="/favicon.svg" alt="EthosFund" className="w-full h-full" /></div>
               <h2 className="font-display text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4 tracking-tight">
                 Ready to fund something bold?
               </h2>
@@ -797,7 +794,7 @@ export default function Home() {
                 Fiat-to-Crypto Onramp
               </h3>
               <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mb-5">
-                Donate with a credit card — Visa, Mastercard, Apple Pay. MoonPay converts it to ETH instantly behind the scenes. No wallet setup required to contribute.
+                Donate with a credit card — Visa, Mastercard, Apple Pay, or Google Pay. MoonPay converts it to ETH instantly behind the scenes. No wallet setup required to contribute.
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <FiatOnrampWidget />
@@ -835,8 +832,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center space-y-6">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-emerald-glow">
-                <span className="text-white font-bold text-lg font-display">EF</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 shadow-emerald-glow">
+                <img src="/favicon.svg" alt="EthosFund" className="w-full h-full" />
               </div>
               <div>
                 <span className="text-xl font-bold font-display text-slate-900 dark:text-white">EthosFund</span>

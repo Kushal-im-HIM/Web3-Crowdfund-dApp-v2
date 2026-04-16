@@ -74,8 +74,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onToggleCollaps
         <div className={`ef-sidebar-brand-border flex items-center justify-between p-4 border-b shrink-0`}>
           {!isCollapsed && (
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-emerald-glow">
-                <span className="text-white font-bold text-lg font-display">EF</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 shadow-emerald-glow">
+                <img src="/favicon.svg" alt="EthosFund" className="w-full h-full" />
               </div>
               <div>
                 <span className="text-lg font-bold font-display text-white dark:text-white">EthosFund</span>

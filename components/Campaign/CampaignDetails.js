@@ -592,6 +592,7 @@ export default function CampaignDetails({ campaignId }) {
           <MilestoneCreationForm
             campaignId={campaignId}
             campaignTarget={targetAmount}
+            campaignDeadline={campaign?.deadline}
             onDone={() => {
               setShowMilestoneSetup(false);
               refetchRegistered?.();

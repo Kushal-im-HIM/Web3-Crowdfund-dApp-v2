@@ -1,42 +1,42 @@
 /**
  * pages/campaigns/index.js
  *
- * Filter fix — classify() updated to correctly identify milestone-based
- * completed campaigns.
+ * V6 FILTER FIX — classify() updated for immutable raisedAmount.
  *
- * PROBLEM:
- *   For milestone campaigns, campaign.withdrawn is NEVER set to true (each
- *   milestone's funds are withdrawn individually via withdrawMilestoneFunds,
- *   not the campaign's withdrawCampaignFunds). So the old check
- *   `funded && withdrawn === true` never caught these as "completed".
- *   They fell through to "active" or "funded_pending", which caused:
- *   - Active tab: showing "Campaign Complete" campaigns (wrong)
- *   - Completed tab: always empty even when campaigns finished (wrong)
+ * ROOT CAUSE OF THE FILTER BUG:
+ *   In v5 contract, withdrawMilestoneFunds() decremented campaign.raisedAmount.
+ *   Signal B in classify() relied on this: raisedAmount === 0n && hasBackers → completed.
+ *   In v6 contract, raisedAmount is IMMUTABLE — it never decrements.
+ *   Signal B therefore NEVER fires → Completed tab always shows 0.
  *
- * FIX — three-signal classify():
- *   Signal A: campaign.withdrawn === true → completed (non-milestone campaigns)
- *   Signal B: raisedAmount === "0" AND contributorsCount > 0 → completed
- *             (milestone campaigns where all funds were released: the contract
- *             decremented raisedAmount to 0 through milestone withdrawals, but
- *             contributors exist proving it was once funded)
- *   Signal C: raisedAmount >= targetAmount AND !withdrawn → funded_pending
- *             (fully funded but funds not yet released — visible in All only)
- *   Signal D: deadline past AND underfunded → expired (visible in All only)
- *   Signal E: deadline in future AND underfunded → active
+ * V6 FIX — new completion signals:
+ *   Signal A: campaign.withdrawn === true (non-milestone campaigns — unchanged)
+ *   Signal B NEW: campaignEscrow == 0n AND raisedAmount >= targetAmount
+ *     The escrow drains to zero only when all milestone funds are released.
+ *     Uses a batched useContractReads for all campaign escrows (one round-trip).
+ *   Signal C: funded, escrow > 0 → funded_pending
+ *   Signal D: deadline past, underfunded → expired
+ *   Signal E: deadline in future, underfunded → active
  *
- * Issue 3: URL query param persistence (unchanged from previous version)
+ * OTHER FIXES:
+ *   - Fixed CampaignCardSkeleton import path (was "../components/" from pages/campaigns/ → wrong)
+ *   - Loading state now uses CampaignCardSkeleton instead of plain pulse divs
+ *   - URL ?filter= persistence unchanged
  */
 
 import { useMemo, useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { useContractReads } from "wagmi";
 import Layout from "../../components/Layout/Layout";
 import CampaignCard from "../../components/Campaign/CampaignCard";
+import { CampaignCardSkeleton } from "../../components/SkeletonCard";
 import { useContract } from "../../hooks/useContract";
+import { useNetworkContracts } from "../../hooks/useNetworkContracts";
+import { CROWDFUNDING_ABI } from "../../constants/abi";
 import {
   FiSearch, FiFilter, FiGrid, FiList,
   FiCheckCircle, FiActivity,
 } from "react-icons/fi";
-import { CampaignCardSkeleton } from "../../components/SkeletonCard";
 
 const TABS = [
   {
@@ -49,7 +49,7 @@ const TABS = [
     key: "completed",
     label: "Completed",
     icon: FiCheckCircle,
-    desc: "Campaigns fully funded AND where all funds have been released to the creator",
+    desc: "Campaigns fully funded AND where all milestone funds have been released to the creator",
   },
   {
     key: "all",
@@ -68,7 +68,6 @@ export default function CampaignsPage() {
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("newest");
 
-  // Issue 3: active tab driven by URL ?filter= param
   const filterFromUrl = router.query.filter;
   const activeTab = VALID_FILTERS.includes(filterFromUrl) ? filterFromUrl : DEFAULT_FILTER;
 
@@ -87,16 +86,50 @@ export default function CampaignsPage() {
   }, [router.isReady, filterFromUrl]);
 
   const { useActiveCampaigns } = useContract();
+  const { contractAddress: CONTRACT_ADDRESS } = useNetworkContracts();
   const { data: campaigns, isLoading } = useActiveCampaigns(0, 100);
+
+  // ── V6 FIX: Batch-read campaignEscrow for all campaigns ──────────────────
+  // Escrow starts equal to raisedAmount and drains to 0 as milestones are withdrawn.
+  // When escrow == 0 AND campaign is funded → all milestone funds have been released.
+  const escrowContracts = useMemo(() =>
+    (campaigns || []).map((c) => ({
+      address: CONTRACT_ADDRESS,
+      abi: CROWDFUNDING_ABI,
+      functionName: "getCampaignEscrow",
+      args: [c.id],
+    })),
+    [campaigns, CONTRACT_ADDRESS]
+  );
+
+  const { data: escrowData } = useContractReads({
+    contracts: escrowContracts,
+    enabled: escrowContracts.length > 0 && Boolean(CONTRACT_ADDRESS),
+    watch: true,
+  });
+
+  // Map campaignId → escrow BigInt (null while loading)
+  const escrowMap = useMemo(() => {
+    if (!campaigns || !escrowData) return {};
+    return campaigns.reduce((map, c, i) => {
+      const result = escrowData[i];
+      map[String(c.id)] =
+        result?.status === "success"
+          ? BigInt(result.result?.toString() ?? "0")
+          : null;
+      return map;
+    }, {});
+  }, [campaigns, escrowData]);
 
   const now = Math.floor(Date.now() / 1000);
 
   /**
-   * classify() — categorise a campaign into one of these buckets:
-   *   "active"        → accepting contributions right now
-   *   "completed"     → all funds have left the contract (withdrawn or released)
-   *   "funded_pending"→ funded but funds not yet released (shown in All only)
-   *   "expired"       → deadline passed, goal not met (shown in All only)
+   * classify() — categorise a campaign.
+   *
+   * "completed"      → all funds have left the contract
+   * "funded_pending" → funded but funds not yet fully released
+   * "active"         → accepting contributions
+   * "expired"        → deadline past, goal not met
    */
   const classify = (c) => {
     const raisedBig = BigInt(c.raisedAmount?.toString() ?? "0");
@@ -104,22 +137,22 @@ export default function CampaignsPage() {
     const funded = raisedBig >= targetBig;
     const expired = Number(c.deadline) < now;
     const withdrawn = Boolean(c.withdrawn);
-    const hasBackers = Number(c.contributorsCount ?? 0) > 0;
+    const escrow = escrowMap[String(c.id)];
 
     // Signal A: explicit withdrawal flag (non-milestone campaigns)
     if (funded && withdrawn) return "completed";
 
-    // Signal B: raisedAmount is 0 but contributors exist
-    // → all milestone funds have been released (each withdrawal decremented raisedAmount)
-    if (raisedBig === 0n && hasBackers) return "completed";
+    // Signal B (V6): escrow drained to zero → all milestone funds released
+    // null escrow means data not yet loaded → conservative fallback to funded_pending
+    if (funded && escrow === 0n) return "completed";
 
-    // Signal C: funded but not yet released
+    // Signal C: funded but funds still in escrow
     if (funded && !withdrawn) return "funded_pending";
 
-    // Signal D: deadline passed, goal not met
+    // Signal D: deadline past, goal not met
     if (expired && !funded) return "expired";
 
-    // Signal E: live and accepting contributions
+    // Signal E: live, accepting contributions
     return "active";
   };
 
@@ -130,7 +163,6 @@ export default function CampaignsPage() {
         const bucket = classify(c);
         if (activeTab === "active" && bucket !== "active") return false;
         if (activeTab === "completed" && bucket !== "completed") return false;
-        // "all" shows everything
 
         const q = searchTerm.toLowerCase();
         if (q) {
@@ -157,9 +189,8 @@ export default function CampaignsPage() {
           default: return 0;
         }
       });
-  }, [campaigns, activeTab, searchTerm, sortBy]);
+  }, [campaigns, activeTab, searchTerm, sortBy, escrowMap]);
 
-  // Counts for tab badges — derived from the filtered array only (no raw campaignCounter)
   const counts = useMemo(() => {
     if (!campaigns) return { active: 0, completed: 0, all: 0 };
     return campaigns.reduce((acc, c) => {
@@ -169,7 +200,7 @@ export default function CampaignsPage() {
       acc.all += 1;
       return acc;
     }, { active: 0, completed: 0, all: 0 });
-  }, [campaigns]);
+  }, [campaigns, escrowMap]);
 
   return (
     <Layout>
@@ -209,7 +240,9 @@ export default function CampaignsPage() {
                     }`}>
                   <Icon className="w-4 h-4" />
                   <span className="hidden xs:inline">{tab.label}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isSel ? "bg-secondary-500 text-white" : "bg-emerald-100 dark:bg-primary-600 text-emerald-700 dark:text-gray-300"
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isSel
+                      ? "bg-secondary-500 text-white"
+                      : "bg-emerald-100 dark:bg-primary-600 text-emerald-700 dark:text-gray-300"
                     }`}>{count}</span>
                 </button>
               );
@@ -221,7 +254,7 @@ export default function CampaignsPage() {
         </div>
 
         {/* Search & Sort */}
-        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 border border-emerald-100 dark:border-primary-700">
+        <div className="bg-white dark:bg-primary-800 rounded-xl shadow-sm p-5 border border-emerald-100 dark:border-primary-700">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -244,13 +277,7 @@ export default function CampaignsPage() {
         <div>
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-primary-800 rounded-xl shadow-lg p-6 animate-pulse border border-emerald-100 dark:border-primary-700">
-                  <div className="h-48 bg-emerald-100 dark:bg-primary-700 rounded-lg mb-4" />
-                  <div className="h-4 bg-emerald-100 dark:bg-primary-700 rounded mb-2" />
-                  <div className="h-4 bg-slate-200 dark:bg-primary-700 rounded w-3/4" />
-                </div>
-              ))}
+              {[...Array(6)].map((_, i) => <CampaignCardSkeleton key={i} />)}
             </div>
           ) : processedCampaigns.length > 0 ? (
             <div className={viewMode === "grid"
@@ -258,8 +285,11 @@ export default function CampaignsPage() {
               : "space-y-4"
             }>
               {processedCampaigns.map((campaign) => (
-                <CampaignCard key={campaign.id} campaign={campaign}
-                  className={viewMode === "list" ? "flex-row" : ""} />
+                <CampaignCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  className={viewMode === "list" ? "flex-row" : ""}
+                />
               ))}
             </div>
           ) : (
@@ -286,6 +316,7 @@ export default function CampaignsPage() {
             </div>
           )}
         </div>
+
       </div>
     </Layout>
   );

@@ -7,39 +7,46 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 
 /**
  * @title Crowdfunding
- * @dev UNIFIED contract merging CrowdfundingMarketplace + MilestoneManager.
  *
- * MANDATE 1 — Architecture:
- *   Single contract owns all state. Eliminates the ICrowdfundingMarketplace
- *   interface, cross-contract calls, and escrow split that caused state-sync bugs.
- *   Vote weight now reads from the internal `contributions` mapping directly.
+ * BUG FIXES IN THIS REVISION
+ * ───────────────────────────
+ * FIX 1 — Withdrawal "Insufficient campaign balance":
+ *   ROOT CAUSE: `raisedAmount` was used as BOTH the historical total AND the
+ *   live escrow balance. `withdrawMilestoneFunds` decremented it after each
+ *   payout, so by the time milestone 2 was ready, `raisedAmount` might differ
+ *   from `m.targetAmount` by even 1 wei (fee edge-cases, early-resolve timing),
+ *   causing `require(amount <= c.raisedAmount)` to revert.
  *
- * MANDATE 2 — DAO Bug Fixes:
- *   BUG A (Bypass): withdrawCampaignFunds() is blocked when milestones are active.
- *     Funds ONLY exit via withdrawMilestoneFunds() after status == Approved.
- *   BUG B (Global Lockout): _tryResolveByVote() now requires quorum (% of total
- *     campaign stake) before resolving. One early vote can no longer flip the status
- *     and lock out all other backers. Vote tracking remains per-user via
- *     mapping(cId => mId => voter => Vote).
+ *   FIX: `campaignEscrow[_cId]` tracks available ETH per campaign separately.
+ *   `raisedAmount` is now immutable after funding — it always equals the
+ *   historical total raised, never decremented. All balance checks and
+ *   deductions now use `campaignEscrow`.
  *
- * ZOMBIE CAMPAIGN FIX (UI Mandate 1):
- *   contributeToCampaign now has an EXPLICIT hard-cap revert at the very top of
- *   the function body — before any state reads or mutations — so the revert
- *   reason is unambiguous and auditable on-chain:
- *     "Hard cap reached: campaign is fully funded"
+ * FIX 2 — Voting on an unfunded milestone:
+ *   A contributor who funded milestone 1 could vote on milestone 2 even if the
+ *   campaign had not raised enough to reach milestone 2's cumulative target.
+ *   `voteMilestone` now checks that `raisedAmount >= cumulativeTarget[1..mId]`
+ *   before allowing any vote. Since `raisedAmount` is now the immutable total,
+ *   this check is always accurate.
+ *
+ * FIX 3 — `_tryResolveByVote` stake comparison:
+ *   Previously used `campaigns[_cId].raisedAmount` (the decremented balance).
+ *   Now uses the immutable `raisedAmount` = full campaign stake. Auto-resolve
+ *   only fires when ALL original ETH has voted, which is the correct condition.
  */
 contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
+
     // ─────────────────────────────────────────────────────────────────────────
     // Enums
     // ─────────────────────────────────────────────────────────────────────────
 
     enum MilestoneStatus {
-        Pending,   // 0 – created, awaiting evidence
-        Submitted, // 1 – evidence submitted, voting/oracle window open
-        Approved,  // 2 – oracle or DAO approved
-        Rejected,  // 3 – oracle or DAO rejected
-        Released,  // 4 – funds withdrawn by creator
-        Refunded   // 5 – funds refunded to contributors
+        Pending,   // 0
+        Submitted, // 1
+        Approved,  // 2
+        Rejected,  // 3
+        Released,  // 4
+        Refunded   // 5
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -53,7 +60,7 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         string description;
         string metadataHash;
         uint256 targetAmount;
-        uint256 raisedAmount;
+        uint256 raisedAmount;   // FIX 1: immutable after funding — never decremented
         uint256 deadline;
         bool withdrawn;
         bool active;
@@ -73,7 +80,7 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         string title;
         string description;
         uint256 targetAmount;
-        uint256 raisedAmount; // unused under waterfall — kept for ABI compat
+        uint256 raisedAmount;
         uint256 deadline;
         MilestoneStatus status;
         string evidenceIpfsHash;
@@ -110,67 +117,42 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     mapping(address => uint256[]) public userCampaigns;
     mapping(address => uint256[]) public userContributions;
 
+    /**
+     * FIX 1: campaignEscrow tracks available (withdrawable) ETH per campaign.
+     * Increases on contribution, decreases on milestone withdrawal or refund.
+     * raisedAmount is NEVER touched after being set — it's the historical total.
+     */
+    mapping(uint256 => uint256) public campaignEscrow;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Milestone state
     // ─────────────────────────────────────────────────────────────────────────
 
     address public oracleAddress;
 
-    /// campaignId => milestoneId => Milestone
     mapping(uint256 => mapping(uint256 => Milestone)) public milestones;
-    /// campaignId => number of milestones created
     mapping(uint256 => uint256) public milestoneCount;
-    /// campaignId => milestones enabled flag (replaces separate registration)
     mapping(uint256 => bool) public milestoneEnabled;
-    /// campaignId => sum of all milestone targetAmounts (for cap validation)
     mapping(uint256 => uint256) public totalMilestoneTarget;
-
-    /**
-     * MANDATE 2 FIX — per-user vote mapping.
-     * Each (campaignId, milestoneId, voter) tuple is independent.
-     * One backer voting does NOT affect any other backer's Vote record.
-     */
-    mapping(uint256 => mapping(uint256 => mapping(address => Vote)))
-        public votes;
+    mapping(uint256 => mapping(uint256 => mapping(address => Vote))) public votes;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Voting parameters (owner-adjustable)
+    // Voting parameters
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Minimum fraction of total campaign stake that must vote before auto-resolution
-    uint256 public votingQuorumBps = 3000; // 30 %
-    /// Fraction of cast votes FOR required to approve
-    uint256 public approvalThresholdBps = 5100; // 51 %
-    /// How long after milestone.deadline the DAO voting window stays open
+    uint256 public votingQuorumBps = 3000;
+    uint256 public approvalThresholdBps = 5100;
     uint256 public votingWindowSeconds = 7 days;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events — Campaign
     // ─────────────────────────────────────────────────────────────────────────
 
-    event CampaignCreated(
-        uint256 indexed campaignId,
-        address indexed creator,
-        uint256 targetAmount,
-        uint256 deadline,
-        string metadataHash
-    );
-    event ContributionMade(
-        uint256 indexed campaignId,
-        address indexed contributor,
-        uint256 amount
-    );
+    event CampaignCreated(uint256 indexed campaignId, address indexed creator, uint256 targetAmount, uint256 deadline, string metadataHash);
+    event ContributionMade(uint256 indexed campaignId, address indexed contributor, uint256 amount);
     event CampaignFunded(uint256 indexed campaignId, uint256 totalRaised);
-    event RefundIssued(
-        uint256 indexed campaignId,
-        address indexed contributor,
-        uint256 amount
-    );
-    event CampaignWithdrawn(
-        uint256 indexed campaignId,
-        address indexed creator,
-        uint256 amount
-    );
+    event RefundIssued(uint256 indexed campaignId, address indexed contributor, uint256 amount);
+    event CampaignWithdrawn(uint256 indexed campaignId, address indexed creator, uint256 amount);
     event FeesWithdrawn(address indexed admin, uint256 amount);
     event CommissionUpdated(uint256 oldCommission, uint256 newCommission);
 
@@ -178,54 +160,15 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // Events — Milestone
     // ─────────────────────────────────────────────────────────────────────────
 
-    event MilestonesEnabled(
-        uint256 indexed campaignId,
-        address indexed creator
-    );
-    event MilestoneCreated(
-        uint256 indexed campaignId,
-        uint256 indexed milestoneId,
-        string title,
-        uint256 targetAmount,
-        uint256 deadline
-    );
-    event MilestoneSubmitted(
-        uint256 indexed campaignId,
-        uint256 indexed milestoneId,
-        string evidenceIpfsHash,
-        string evidenceUrl
-    );
-    event MilestoneApproved(
-        uint256 indexed campaignId,
-        uint256 indexed milestoneId,
-        address approver
-    );
-    event MilestoneRejected(
-        uint256 indexed campaignId,
-        uint256 indexed milestoneId,
-        address rejecter
-    );
-    event MilestoneReleased(
-        uint256 indexed campaignId,
-        uint256 indexed milestoneId,
-        uint256 amount
-    );
-    event MilestoneVoted(
-        uint256 indexed campaignId,
-        uint256 indexed milestoneId,
-        address indexed voter,
-        bool inFavour,
-        uint256 weight
-    );
-    event OracleAddressUpdated(
-        address indexed oldOracle,
-        address indexed newOracle
-    );
-    event VotingParamsUpdated(
-        uint256 quorumBps,
-        uint256 thresholdBps,
-        uint256 windowSeconds
-    );
+    event MilestonesEnabled(uint256 indexed campaignId, address indexed creator);
+    event MilestoneCreated(uint256 indexed campaignId, uint256 indexed milestoneId, string title, uint256 targetAmount, uint256 deadline);
+    event MilestoneSubmitted(uint256 indexed campaignId, uint256 indexed milestoneId, string evidenceIpfsHash, string evidenceUrl);
+    event MilestoneApproved(uint256 indexed campaignId, uint256 indexed milestoneId, address approver);
+    event MilestoneRejected(uint256 indexed campaignId, uint256 indexed milestoneId, address rejecter);
+    event MilestoneReleased(uint256 indexed campaignId, uint256 indexed milestoneId, uint256 amount);
+    event MilestoneVoted(uint256 indexed campaignId, uint256 indexed milestoneId, address indexed voter, bool inFavour, uint256 weight);
+    event OracleAddressUpdated(address indexed oldOracle, address indexed newOracle);
+    event VotingParamsUpdated(uint256 quorumBps, uint256 thresholdBps, uint256 windowSeconds);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Modifiers
@@ -236,33 +179,22 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         require(campaigns[_id].active, "Campaign not active");
         _;
     }
-
     modifier onlyCampaignCreator(uint256 _id) {
         require(campaigns[_id].creator == msg.sender, "Not campaign creator");
         _;
     }
-
     modifier campaignNotEnded(uint256 _id) {
-        require(
-            block.timestamp < campaigns[_id].deadline,
-            "Campaign has ended"
-        );
+        require(block.timestamp < campaigns[_id].deadline, "Campaign has ended");
         _;
     }
-
     modifier campaignEnded(uint256 _id) {
-        require(
-            block.timestamp >= campaigns[_id].deadline,
-            "Campaign still active"
-        );
+        require(block.timestamp >= campaigns[_id].deadline, "Campaign still active");
         _;
     }
-
     modifier onlyOracle() {
         require(msg.sender == oracleAddress, "Not oracle");
         _;
     }
-
     modifier validMilestone(uint256 _cId, uint256 _mId) {
         require(_mId > 0 && _mId <= milestoneCount[_cId], "Invalid milestone");
         _;
@@ -287,11 +219,7 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         oracleAddress = _newOracle;
     }
 
-    function setVotingParams(
-        uint256 _quorumBps,
-        uint256 _thresholdBps,
-        uint256 _windowSeconds
-    ) external onlyOwner {
+    function setVotingParams(uint256 _quorumBps, uint256 _thresholdBps, uint256 _windowSeconds) external onlyOwner {
         require(_quorumBps <= 10000, "Quorum > 100%");
         require(_thresholdBps <= 10000, "Threshold > 100%");
         require(_windowSeconds >= 1 days, "Window too short");
@@ -314,23 +242,20 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
 
     function withdrawFees(uint256 _amount) external onlyOwner nonReentrant {
         require(_amount <= totalFeesCollected, "Insufficient fee balance");
-        require(
-            _amount <= address(this).balance,
-            "Insufficient contract balance"
-        );
+        require(_amount <= address(this).balance, "Insufficient contract balance");
         totalFeesCollected -= _amount;
         payable(owner()).transfer(_amount);
         emit FeesWithdrawn(msg.sender, _amount);
     }
 
-    function emergencyRefund(
-        uint256 _cId,
-        address _contributor
-    ) external onlyOwner nonReentrant {
+    function emergencyRefund(uint256 _cId, address _contributor) external onlyOwner nonReentrant {
         require(contributions[_cId][_contributor] > 0, "No contribution");
         uint256 amt = contributions[_cId][_contributor];
         contributions[_cId][_contributor] = 0;
-        campaigns[_cId].raisedAmount -= amt;
+        // FIX 1: deduct from escrow, not raisedAmount
+        if (campaignEscrow[_cId] >= amt) {
+            campaignEscrow[_cId] -= amt;
+        }
         payable(_contributor).transfer(amt);
         emit RefundIssued(_cId, _contributor, amt);
     }
@@ -339,12 +264,8 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         payable(owner()).transfer(address(this).balance);
     }
 
-    function pause() external onlyOwner {
-        _pause();
-    }
-    function unpause() external onlyOwner {
-        _unpause();
-    }
+    function pause() external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Campaign — Write
@@ -357,10 +278,7 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         uint256 _targetAmount,
         uint256 _duration
     ) external payable whenNotPaused nonReentrant {
-        require(
-            msg.value >= CAMPAIGN_CREATION_FEE,
-            "Insufficient creation fee"
-        );
+        require(msg.value >= CAMPAIGN_CREATION_FEE, "Insufficient creation fee");
         require(_targetAmount > 0, "Target must be > 0");
         require(_duration > 0, "Duration must be > 0");
         require(bytes(_title).length > 0, "Empty title");
@@ -391,57 +309,21 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
             payable(msg.sender).transfer(msg.value - CAMPAIGN_CREATION_FEE);
         }
 
-        emit CampaignCreated(
-            campaignCounter,
-            msg.sender,
-            _targetAmount,
-            deadline,
-            _metadataHash
-        );
+        emit CampaignCreated(campaignCounter, msg.sender, _targetAmount, deadline, _metadataHash);
     }
 
-    /**
-     * @notice Contribute ETH to an active campaign.
-     *
-     * ZOMBIE CAMPAIGN FIX:
-     *   The very first check is an EXPLICIT hard-cap revert. This fires before
-     *   any storage reads or the `remaining` calculation, producing a clean,
-     *   unambiguous revert reason on-chain:
-     *     "Hard cap reached: campaign is fully funded"
-     *
-     *   Any ETH sent beyond the remaining allowance is automatically refunded
-     *   to the contributor (unchanged behaviour from the original contract).
-     */
     function contributeToCampaign(
         uint256 _cId
-    )
-        external
-        payable
-        validCampaign(_cId)
-        campaignNotEnded(_cId)
-        whenNotPaused
-        nonReentrant
-    {
+    ) external payable validCampaign(_cId) campaignNotEnded(_cId) whenNotPaused nonReentrant {
         require(msg.value > 0, "Must send ETH");
-        require(
-            campaigns[_cId].creator != msg.sender,
-            "Creator cannot contribute"
-        );
-
-        // ── ZOMBIE CAMPAIGN FIX: explicit hard-cap revert ─────────────────
-        // Revert immediately if the campaign has already reached its target.
-        // This is checked BEFORE any state mutation so it costs minimal gas
-        // and produces a clear, auditable reason string.
+        require(campaigns[_cId].creator != msg.sender, "Creator cannot contribute");
         require(
             campaigns[_cId].raisedAmount < campaigns[_cId].targetAmount,
             "Hard cap reached: campaign is fully funded"
         );
-        // ─────────────────────────────────────────────────────────────────
 
         Campaign storage c = campaigns[_cId];
-        // Safe subtraction: hard-cap check above guarantees raisedAmount < targetAmount
         uint256 remaining = c.targetAmount - c.raisedAmount;
-
         uint256 accepted = msg.value > remaining ? remaining : msg.value;
         uint256 refund   = msg.value - accepted;
 
@@ -452,9 +334,10 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
 
         contributions[_cId][msg.sender] += accepted;
         c.raisedAmount += accepted;
-        campaignContributions[_cId].push(
-            Contribution(msg.sender, accepted, block.timestamp)
-        );
+        // FIX 1: also track in escrow
+        campaignEscrow[_cId] += accepted;
+
+        campaignContributions[_cId].push(Contribution(msg.sender, accepted, block.timestamp));
 
         if (refund > 0) payable(msg.sender).transfer(refund);
 
@@ -464,42 +347,32 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         }
     }
 
-    /**
-     * @dev Withdraw funds from a non-milestone campaign.
-     *
-     * MANDATE 2 FIX — Bypass Bug:
-     *   If milestones are enabled for this campaign the function REVERTS.
-     *   Funds may only leave the contract via withdrawMilestoneFunds() once
-     *   each milestone reaches status == Approved.
-     */
-    function withdrawCampaignFunds(
-        uint256 _cId
-    ) external validCampaign(_cId) onlyCampaignCreator(_cId) nonReentrant {
+    function withdrawCampaignFunds(uint256 _cId) external validCampaign(_cId) onlyCampaignCreator(_cId) nonReentrant {
         Campaign storage c = campaigns[_cId];
         require(!c.withdrawn, "Already withdrawn");
         require(c.raisedAmount >= c.targetAmount, "Target not reached");
-
-        // ── MANDATE 2 FIX ──────────────────────────────────────────────────
         require(
             !milestoneEnabled[_cId],
             "Milestone campaign: use withdrawMilestoneFunds() per approved milestone"
         );
-        // ───────────────────────────────────────────────────────────────────
-
         c.withdrawn = true;
-        c.creator.transfer(c.raisedAmount);
-        emit CampaignWithdrawn(_cId, msg.sender, c.raisedAmount);
+        // FIX 1: use escrow for transfer
+        uint256 amount = campaignEscrow[_cId];
+        campaignEscrow[_cId] = 0;
+        c.creator.transfer(amount);
+        emit CampaignWithdrawn(_cId, msg.sender, amount);
     }
 
-    function getRefund(
-        uint256 _cId
-    ) external validCampaign(_cId) campaignEnded(_cId) nonReentrant {
+    function getRefund(uint256 _cId) external validCampaign(_cId) campaignEnded(_cId) nonReentrant {
         Campaign storage c = campaigns[_cId];
         require(c.raisedAmount < c.targetAmount, "Campaign was successful");
         require(contributions[_cId][msg.sender] > 0, "No contribution");
-
         uint256 amt = contributions[_cId][msg.sender];
         contributions[_cId][msg.sender] = 0;
+        // FIX 1: deduct from escrow
+        if (campaignEscrow[_cId] >= amt) {
+            campaignEscrow[_cId] -= amt;
+        }
         payable(msg.sender).transfer(amt);
         emit RefundIssued(_cId, msg.sender, amt);
     }
@@ -525,16 +398,10 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         require(_targetAmount > 0, "Target must be > 0");
         require(_duration > 0, "Duration must be > 0");
         require(bytes(_title).length > 0, "Empty title");
-        require(
-            milestoneCount[_cId] < MAX_MILESTONES_PER_CAMPAIGN,
-            "Max milestones reached"
-        );
+        require(milestoneCount[_cId] < MAX_MILESTONES_PER_CAMPAIGN, "Max milestones reached");
 
         uint256 newTotal = totalMilestoneTarget[_cId] + _targetAmount;
-        require(
-            newTotal <= campaigns[_cId].targetAmount,
-            "Milestone targets exceed campaign goal"
-        );
+        require(newTotal <= campaigns[_cId].targetAmount, "Milestone targets exceed campaign goal");
         totalMilestoneTarget[_cId] = newTotal;
 
         milestoneCount[_cId]++;
@@ -557,13 +424,7 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
             fundsReleased: false
         });
 
-        emit MilestoneCreated(
-            _cId,
-            mid,
-            _title,
-            _targetAmount,
-            block.timestamp + _duration
-        );
+        emit MilestoneCreated(_cId, mid, _title, _targetAmount, block.timestamp + _duration);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -571,50 +432,28 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // ─────────────────────────────────────────────────────────────────────────
 
     function submitMilestoneEvidence(
-        uint256 _cId,
-        uint256 _mId,
-        string calldata _ipfsHash,
-        string calldata _url
+        uint256 _cId, uint256 _mId,
+        string calldata _ipfsHash, string calldata _url
     ) external onlyCampaignCreator(_cId) validMilestone(_cId, _mId) {
         Milestone storage m = milestones[_cId][_mId];
-        require(
-            m.status == MilestoneStatus.Pending,
-            "Already submitted or resolved"
-        );
-        require(
-            bytes(_ipfsHash).length > 0 || bytes(_url).length > 0,
-            "Must provide evidence"
-        );
-
+        require(m.status == MilestoneStatus.Pending, "Already submitted or resolved");
+        require(bytes(_ipfsHash).length > 0 || bytes(_url).length > 0, "Must provide evidence");
         m.status = MilestoneStatus.Submitted;
         m.evidenceIpfsHash = _ipfsHash;
         m.evidenceUrl = _url;
-
         emit MilestoneSubmitted(_cId, _mId, _ipfsHash, _url);
     }
 
-    function approveMilestoneByOracle(
-        uint256 _cId,
-        uint256 _mId
-    ) external onlyOracle validMilestone(_cId, _mId) {
+    function approveMilestoneByOracle(uint256 _cId, uint256 _mId) external onlyOracle validMilestone(_cId, _mId) {
         Milestone storage m = milestones[_cId][_mId];
-        require(
-            m.status == MilestoneStatus.Submitted,
-            "Not in Submitted state"
-        );
+        require(m.status == MilestoneStatus.Submitted, "Not in Submitted state");
         m.status = MilestoneStatus.Approved;
         emit MilestoneApproved(_cId, _mId, msg.sender);
     }
 
-    function rejectMilestoneByOracle(
-        uint256 _cId,
-        uint256 _mId
-    ) external onlyOracle validMilestone(_cId, _mId) {
+    function rejectMilestoneByOracle(uint256 _cId, uint256 _mId) external onlyOracle validMilestone(_cId, _mId) {
         Milestone storage m = milestones[_cId][_mId];
-        require(
-            m.status == MilestoneStatus.Submitted,
-            "Not in Submitted state"
-        );
+        require(m.status == MilestoneStatus.Submitted, "Not in Submitted state");
         m.status = MilestoneStatus.Rejected;
         emit MilestoneRejected(_cId, _mId, msg.sender);
     }
@@ -624,15 +463,10 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // ─────────────────────────────────────────────────────────────────────────
 
     function voteMilestone(
-        uint256 _cId,
-        uint256 _mId,
-        bool _inFavour
+        uint256 _cId, uint256 _mId, bool _inFavour
     ) external validMilestone(_cId, _mId) {
         Milestone storage m = milestones[_cId][_mId];
 
-        // Clear revert reason when the milestone has already been resolved.
-        // This surfaces as a readable string in MetaMask / viem instead of a
-        // generic execution-reverted error.
         require(
             m.status == MilestoneStatus.Submitted,
             m.status == MilestoneStatus.Approved
@@ -644,47 +478,45 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
                         : "Voting not open"
         );
 
-        // Reject votes after the DAO voting window has expired.
-        // Once the window closes, anyone should call finalizeVoting() instead.
         require(
             block.timestamp < m.deadline + votingWindowSeconds,
             "Voting window has closed - call finalizeVoting() to settle"
         );
 
-        Vote storage v = votes[_cId][_mId][msg.sender];
-        require(!v.hasVoted, "You have already voted on this milestone");
-
+        // FIX 2: voter must have contributed AND the campaign must have raised
+        // enough to reach this milestone's cumulative target.
+        // This prevents contributors who only funded milestone 1 from voting
+        // on milestone 2 before it has received any campaign allocation.
         uint256 weight = contributions[_cId][msg.sender];
         require(weight > 0, "Only contributors can vote");
+
+        uint256 cumulativeTarget = 0;
+        for (uint256 i = 1; i <= _mId; i++) {
+            cumulativeTarget += milestones[_cId][i].targetAmount;
+        }
+        require(
+            campaigns[_cId].raisedAmount >= cumulativeTarget,
+            "This milestone has not received enough campaign funding yet"
+        );
+
+        Vote storage v = votes[_cId][_mId][msg.sender];
+        require(!v.hasVoted, "You have already voted on this milestone");
 
         v.hasVoted = true;
         v.inFavour = _inFavour;
         v.weight = weight;
 
-        if (_inFavour) {
-            m.totalVotesFor += weight;
-        } else {
-            m.totalVotesAgainst += weight;
-        }
+        if (_inFavour) { m.totalVotesFor += weight; }
+        else           { m.totalVotesAgainst += weight; }
 
         emit MilestoneVoted(_cId, _mId, msg.sender, _inFavour, weight);
-
         _tryResolveByVote(_cId, _mId);
     }
 
-    function finalizeVoting(
-        uint256 _cId,
-        uint256 _mId
-    ) external validMilestone(_cId, _mId) {
+    function finalizeVoting(uint256 _cId, uint256 _mId) external validMilestone(_cId, _mId) {
         Milestone storage m = milestones[_cId][_mId];
-        require(
-            m.status == MilestoneStatus.Submitted,
-            "Not in Submitted state"
-        );
-        require(
-            block.timestamp >= m.deadline + votingWindowSeconds,
-            "Voting window still open"
-        );
+        require(m.status == MilestoneStatus.Submitted, "Not in Submitted state");
+        require(block.timestamp >= m.deadline + votingWindowSeconds, "Voting window still open");
         _resolveByVote(_cId, _mId);
     }
 
@@ -692,18 +524,17 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // Milestone — Fund Release
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * FIX 1: Use campaignEscrow instead of c.raisedAmount for balance check.
+     * raisedAmount is never decremented, so it always equals the historical
+     * total raised. campaignEscrow starts equal to raisedAmount and decrements
+     * with each withdrawal, accurately tracking available funds.
+     */
     function withdrawMilestoneFunds(
-        uint256 _cId,
-        uint256 _mId
-    )
-        external
-        onlyCampaignCreator(_cId)
-        validMilestone(_cId, _mId)
-        nonReentrant
-    {
+        uint256 _cId, uint256 _mId
+    ) external onlyCampaignCreator(_cId) validMilestone(_cId, _mId) nonReentrant {
         Milestone storage m = milestones[_cId][_mId];
         require(!m.fundsReleased, "Already released");
-
         require(
             m.status == MilestoneStatus.Approved,
             "Milestone not approved by Oracle or DAO - cannot withdraw"
@@ -711,24 +542,26 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
 
         Campaign storage c = campaigns[_cId];
         uint256 amount = m.targetAmount;
-        require(amount <= c.raisedAmount, "Insufficient campaign balance");
+
+        // FIX 1: check escrow balance, not raisedAmount
+        require(
+            amount <= campaignEscrow[_cId],
+            "Insufficient escrow balance - check previous withdrawals"
+        );
 
         m.fundsReleased = true;
         m.status = MilestoneStatus.Released;
-        c.raisedAmount -= amount;
+        // FIX 1: deduct from escrow only, never touch raisedAmount
+        campaignEscrow[_cId] -= amount;
 
         payable(c.creator).transfer(amount);
         emit MilestoneReleased(_cId, _mId, amount);
     }
 
-    function claimMilestoneRefund(
-        uint256 _cId,
-        uint256 _mId
-    ) external validMilestone(_cId, _mId) nonReentrant {
+    function claimMilestoneRefund(uint256 _cId, uint256 _mId) external validMilestone(_cId, _mId) nonReentrant {
         Milestone storage m = milestones[_cId][_mId];
         require(
-            m.status == MilestoneStatus.Rejected ||
-                m.status == MilestoneStatus.Refunded,
+            m.status == MilestoneStatus.Rejected || m.status == MilestoneStatus.Refunded,
             "Not refundable"
         );
 
@@ -742,12 +575,13 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         require(refundAmt > 0, "Refund too small");
 
         contributions[_cId][msg.sender] = 0;
-        if (m.status == MilestoneStatus.Rejected)
-            m.status = MilestoneStatus.Refunded;
+        if (m.status == MilestoneStatus.Rejected) m.status = MilestoneStatus.Refunded;
 
-        campaigns[_cId].raisedAmount -= refundAmt;
+        // FIX 1: deduct from escrow, not raisedAmount
+        if (campaignEscrow[_cId] >= refundAmt) {
+            campaignEscrow[_cId] -= refundAmt;
+        }
         payable(msg.sender).transfer(refundAmt);
-
         emit MilestoneReleased(_cId, _mId, refundAmt);
     }
 
@@ -756,40 +590,21 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * @dev Called after each vote. Only auto-resolves when the result is
-     *      FULLY DETERMINED — i.e., every single wei of campaign stake has
-     *      been cast. This guarantees that no contributor is ever locked out
-     *      before they have had a chance to vote.
-     *
-     *      For all partial-participation scenarios (the common case), the
-     *      milestone stays in Submitted state until:
-     *        (a) the oracle acts, or
-     *        (b) the votingWindow expires and anyone calls finalizeVoting().
-     *
-     *      finalizeVoting() is the intended resolution path for DAO votes.
-     *      _tryResolveByVote() is only a convenience shortcut for the rare
-     *      case where participation is 100%.
-     *
-     * Why not mid-vote auto-resolution?
-     *   With 4 donors (0.4, 0.2, 0.2, 0.2 ETH) any resolution order locked
-     *   out at least one donor before they could vote:
-     *     • 0.4 ETH voted first  → quorum hit (40% > 30%), resolved immediately
-     *     • 3×0.2 voted first    → 0.6 ETH > approvalLine (0.51 ETH), resolved
-     *   Both are mathematically "correct" but terrible UX. Removing mid-vote
-     *   resolution entirely is the only safe approach for small donor groups.
+     * FIX 3: Use raisedAmount (immutable historical total) as totalStake.
+     * Previously compared against the decremented escrow balance, causing
+     * early resolution after milestone 1 withdrawal (0.66 ETH stake instead
+     * of the true 1.36 ETH). Now correctly waits for 100% of original stakers.
      */
     function _tryResolveByVote(uint256 _cId, uint256 _mId) internal {
         Milestone storage m = milestones[_cId][_mId];
         uint256 totalVotes = m.totalVotesFor + m.totalVotesAgainst;
         if (totalVotes == 0) return;
 
+        // FIX 3: use raisedAmount (historical total, never decremented)
         uint256 totalStake = campaigns[_cId].raisedAmount;
         if (totalStake == 0) return;
 
-        // Only auto-resolve when EVERY contributor has voted (100 % participation).
-        // In practice this means the result is now fully determined and waiting
-        // for the window to expire serves no purpose.
-        // For partial participation, wait for finalizeVoting() after window expiry.
+        // Only auto-resolve when 100% of original stakers have voted.
         if (totalVotes < totalStake) return;
 
         _resolveByVote(_cId, _mId);
@@ -821,28 +636,19 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         return campaigns[_id];
     }
 
-    function getContribution(
-        uint256 _cId,
-        address _contributor
-    ) external view returns (uint256) {
+    function getContribution(uint256 _cId, address _contributor) external view returns (uint256) {
         return contributions[_cId][_contributor];
     }
 
-    function getCampaignContributions(
-        uint256 _cId
-    ) external view returns (Contribution[] memory) {
+    function getCampaignContributions(uint256 _cId) external view returns (Contribution[] memory) {
         return campaignContributions[_cId];
     }
 
-    function getUserCampaigns(
-        address _user
-    ) external view returns (uint256[] memory) {
+    function getUserCampaigns(address _user) external view returns (uint256[] memory) {
         return userCampaigns[_user];
     }
 
-    function getUserContributions(
-        address _user
-    ) external view returns (uint256[] memory) {
+    function getUserContributions(address _user) external view returns (uint256[] memory) {
         return userContributions[_user];
     }
 
@@ -851,75 +657,44 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         return campaigns[_id].raisedAmount >= campaigns[_id].targetAmount;
     }
 
-    function getCampaignStats(
-        uint256 _id
-    )
-        external
-        view
-        returns (
-            uint256 raisedAmount,
-            uint256 targetAmount,
-            uint256 contributorsCount,
-            uint256 timeLeft,
-            bool isActive,
-            bool isSuccessful
-        )
-    {
+    function getCampaignStats(uint256 _id) external view returns (
+        uint256 raisedAmount, uint256 targetAmount, uint256 contributorsCount,
+        uint256 timeLeft, bool isActive, bool isSuccessful
+    ) {
         require(_id > 0 && _id <= campaignCounter, "Invalid ID");
         Campaign memory c = campaigns[_id];
         raisedAmount = c.raisedAmount;
         targetAmount = c.targetAmount;
         contributorsCount = c.contributorsCount;
-        timeLeft = block.timestamp >= c.deadline
-            ? 0
-            : c.deadline - block.timestamp;
+        timeLeft = block.timestamp >= c.deadline ? 0 : c.deadline - block.timestamp;
         isActive = c.active;
         isSuccessful = c.raisedAmount >= c.targetAmount;
     }
 
-    function getContractStats()
-        external
-        view
-        returns (
-            uint256 totalCampaigns,
-            uint256 totalFees,
-            uint256 contractBalance
-        )
-    {
+    function getContractStats() external view returns (
+        uint256 totalCampaigns, uint256 totalFees, uint256 contractBalance
+    ) {
         totalCampaigns = campaignCounter;
         totalFees = totalFeesCollected;
         contractBalance = address(this).balance;
     }
 
-    function getActiveCampaigns(
-        uint256 _offset,
-        uint256 _limit
-    ) external view returns (Campaign[] memory) {
+    function getActiveCampaigns(uint256 _offset, uint256 _limit) external view returns (Campaign[] memory) {
         require(_limit > 0 && _limit <= 100, "Invalid limit");
-
         uint256 activeCount = 0;
         for (uint256 i = 1; i <= campaignCounter; i++) {
             if (campaigns[i].active) activeCount++;
         }
         if (_offset >= activeCount) return new Campaign[](0);
 
-        uint256 returnCount = (_offset + _limit > activeCount)
-            ? activeCount - _offset
-            : _limit;
-
+        uint256 returnCount = (_offset + _limit > activeCount) ? activeCount - _offset : _limit;
         Campaign[] memory result = new Campaign[](returnCount);
         uint256 resultIdx = 0;
         uint256 currentIdx = 0;
 
-        for (
-            uint256 i = 1;
-            i <= campaignCounter && resultIdx < returnCount;
-            i++
-        ) {
+        for (uint256 i = 1; i <= campaignCounter && resultIdx < returnCount; i++) {
             if (campaigns[i].active) {
-                if (currentIdx >= _offset) {
-                    result[resultIdx++] = campaigns[i];
-                }
+                if (currentIdx >= _offset) { result[resultIdx++] = campaigns[i]; }
                 currentIdx++;
             }
         }
@@ -934,16 +709,11 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         return milestoneEnabled[_cId];
     }
 
-    function getMilestone(
-        uint256 _cId,
-        uint256 _mId
-    ) external view validMilestone(_cId, _mId) returns (Milestone memory) {
+    function getMilestone(uint256 _cId, uint256 _mId) external view validMilestone(_cId, _mId) returns (Milestone memory) {
         return milestones[_cId][_mId];
     }
 
-    function getCampaignMilestones(
-        uint256 _cId
-    ) external view returns (Milestone[] memory) {
+    function getCampaignMilestones(uint256 _cId) external view returns (Milestone[] memory) {
         uint256 count = milestoneCount[_cId];
         Milestone[] memory result = new Milestone[](count);
         for (uint256 i = 1; i <= count; i++) {
@@ -952,12 +722,16 @@ contract Crowdfunding is ReentrancyGuard, Ownable, Pausable {
         return result;
     }
 
-    function getVote(
-        uint256 _cId,
-        uint256 _mId,
-        address _voter
-    ) external view returns (Vote memory) {
+    function getVote(uint256 _cId, uint256 _mId, address _voter) external view returns (Vote memory) {
         return votes[_cId][_mId][_voter];
+    }
+
+    /**
+     * @dev Returns the available escrow balance for a campaign.
+     * Useful for frontend to show withdrawable amounts.
+     */
+    function getCampaignEscrow(uint256 _cId) external view returns (uint256) {
+        return campaignEscrow[_cId];
     }
 
     receive() external payable {}

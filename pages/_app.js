@@ -46,17 +46,11 @@ function MyApp({ Component, pageProps }) {
       >
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "24px" }}>
           {/* EthosFund logo mark */}
-          <div style={{
-            width: "56px", height: "56px",
-            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-            borderRadius: "14px",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 8px 24px rgba(16, 185, 129, 0.35)",
-            fontSize: "22px", fontWeight: "700", color: "#ffffff",
-            letterSpacing: "-0.5px",
-          }}>
-            EF
-          </div>
+          <img
+            src="/favicon.svg"
+            alt="EthosFund"
+            style={{ width: "56px", height: "56px", borderRadius: "14px" }}
+          />
 
           {/* Emerald ring spinner */}
           <div style={{

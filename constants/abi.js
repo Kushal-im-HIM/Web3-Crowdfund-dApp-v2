@@ -216,6 +216,13 @@ export const CROWDFUNDING_ABI = [
   { inputs: [{ name: "newOwner", type: "address" }], name: "transferOwnership", outputs: [], stateMutability: "nonpayable", type: "function" },
   { inputs: [], name: "renounceOwnership", outputs: [], stateMutability: "nonpayable", type: "function" },
 
+  // ── V6 Contract additions ─────────────────────────────────────────────────
+  // getCampaignEscrow: returns the withdrawable escrow balance for a campaign.
+  // raisedAmount is now immutable; campaignEscrow tracks remaining funds.
+  { inputs: [{ name: "_cId", type: "uint256" }], name: "getCampaignEscrow", outputs: [{ name: "", type: "uint256" }], stateMutability: "view", type: "function" },
+  // campaignEscrow public mapping getter
+  { inputs: [{ name: "", type: "uint256" }], name: "campaignEscrow", outputs: [{ name: "", type: "uint256" }], stateMutability: "view", type: "function" },
+
   // ── Fallback ───────────────────────────────────────────────────────────────
   { stateMutability: "payable", type: "receive" }
 ];

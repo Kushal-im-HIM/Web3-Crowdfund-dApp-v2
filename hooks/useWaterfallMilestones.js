@@ -1,47 +1,33 @@
 /**
  * hooks/useWaterfallMilestones.js
  *
- * Issue 8 fix (corrected) — Milestone progress bars collapsing after withdrawal.
+ * V6 CONTRACT FIX — raisedAmount is now IMMUTABLE.
  *
- * ROOT CAUSE recap:
- *   After withdrawMilestoneFunds() the contract does:
- *     campaign.raisedAmount -= milestone.targetAmount
- *   So if 1.0 ETH was raised and MS1 (0.5 ETH) is withdrawn, raisedAmount → 0.5 ETH.
- *   The old waterfall used raisedAmount as the budget, so MS2's bar dropped to 0%.
+ * Previous behavior (v5 and earlier):
+ *   `withdrawMilestoneFunds()` decremented `campaign.raisedAmount` by the
+ *   milestone's targetAmount. So the hook needed to ADD BACK released
+ *   milestone amounts to reconstruct "effective_raised":
+ *     effective_raised = raisedAmount + Σ(released milestone targets)
  *
- * PREVIOUS (WRONG) FIX:
- *   We switched to using campaignTargetAmount as the budget. This broke the fill
- *   display: 0.2 ETH donated on a 1.0 ETH target showed BOTH bars at 100%
- *   because the hook was distributing the full 1.0 ETH target amount.
+ * V6 behavior (current contract):
+ *   `withdrawMilestoneFunds()` deducts from `campaignEscrow[_cId]` ONLY.
+ *   `campaign.raisedAmount` is NEVER decremented — it equals the true
+ *   historical raised total at all times.
  *
- * CORRECT FIX — Effective Budget Reconstruction:
- *   effective_raised = campaign.raisedAmount
- *                    + Σ(targetAmount of all Released milestones)
+ * Therefore the reconstruction is NO LONGER NEEDED.
+ * `effective_raised = campaign.raisedAmount` directly.
  *
- *   Released milestones had their targetAmount deducted from raisedAmount at
- *   withdrawal time. Adding them back reconstructs what the true raised amount
- *   was at the peak. This gives the correct fill for all scenarios:
+ * The waterfall distribution logic (Released → pin 100%, Refunded → pin 0%,
+ * others → fill from budget) is unchanged — only the starting budget value
+ * is different.
  *
- *   Scenario A — 0.2 ETH donated, no withdrawals:
- *     effective_raised = 0.2 + 0 = 0.2 ETH
- *     MS1 (0.5 ETH target) → waterfall gets 0.2 ETH = 40% ✓
- *     MS2 (0.5 ETH target) → waterfall gets 0.0 ETH =  0% ✓
- *
- *   Scenario B — 1.0 ETH donated, MS1 withdrawn:
- *     raisedAmount = 0.5 ETH (decremented after withdrawal)
- *     MS1 status = Released
- *     effective_raised = 0.5 + 0.5 = 1.0 ETH
- *     MS1 (Released) → pinned at 100% ✓
- *     MS2 (0.5 ETH target) → gets 0.5 ETH = 100% ✓
- *
- *   Scenario C — 1.0 ETH donated, both withdrawn:
- *     raisedAmount = 0.0 ETH
- *     effective_raised = 0.0 + 0.5 + 0.5 = 1.0 ETH
- *     MS1 (Released) → pinned at 100% ✓
- *     MS2 (Released) → pinned at 100% ✓
- *
- * PROP: callers pass campaignRaisedAmount (the live, possibly-decremented value).
- *   CampaignDetails.js is updated back to campaignRaisedAmount={campaign.raisedAmount}.
+ * All scenarios with v6:
+ *   A: 0.2 ETH raised, no withdrawals:
+ *      remaining = 0.2 → MS1 (0.5) gets 0.2 (40%), MS2 gets 0 ✓
+ *   B: 1.0 ETH raised, MS1 (0.5 ETH) withdrawn:
+ *      remaining = 1.0 → MS1 Released pin 100% consume 0.5 → MS2 gets 0.5 (100%) ✓
+ *   C: 1.0 ETH raised, both withdrawn:
+ *      remaining = 1.0 → MS1 Released consume 0.5 → MS2 Released consume 0.5 ✓
  */
 
 import { useMemo } from "react";
@@ -51,7 +37,7 @@ const MS_REFUNDED = 5;
 
 /**
  * @param {Array}  milestones              raw milestone objects from useCampaignMilestones()
- * @param {*}      campaignRaisedAmount    campaign.raisedAmount in wei (may be decremented)
+ * @param {*}      campaignRaisedAmount    campaign.raisedAmount in wei (IMMUTABLE in v6)
  */
 export function useWaterfallMilestones(milestones, campaignRaisedAmount) {
   const raisedKey = campaignRaisedAmount?.toString() ?? "0";
@@ -59,26 +45,13 @@ export function useWaterfallMilestones(milestones, campaignRaisedAmount) {
   return useMemo(() => {
     if (!milestones || milestones.length === 0) return [];
 
-    // ── Step 1: reconstruct effective_raised ──────────────────────────────
-    // Add back the targetAmount of any milestone that has already been
-    // Released (funds withdrawn) — the contract deducted those from raisedAmount.
-    let currentRaised;
-    try { currentRaised = BigInt(raisedKey); }
-    catch { currentRaised = 0n; }
+    // V6 FIX: raisedAmount is immutable — use it directly as the budget.
+    // No reconstruction needed (removed releasedSum addition from v5).
+    let remaining;
+    try { remaining = BigInt(raisedKey); }
+    catch { remaining = 0n; }
 
-    let releasedSum = 0n;
-    for (const m of milestones) {
-      const statusNum = Number(m.status ?? 0);
-      if (statusNum === MS_RELEASED) {
-        try { releasedSum += BigInt(m.targetAmount?.toString() ?? "0"); }
-        catch { /* skip malformed */ }
-      }
-    }
-
-    // effective_raised is what raisedAmount would be if no withdrawals had happened
-    let remaining = currentRaised + releasedSum;
-
-    // ── Step 2: distribute via waterfall ─────────────────────────────────
+    // ── Distribute via waterfall ──────────────────────────────────────────
     return milestones.map((milestone) => {
       const statusNum = Number(milestone.status ?? 0);
       const isReleased = statusNum === MS_RELEASED;
